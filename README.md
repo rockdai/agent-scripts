@@ -1,6 +1,6 @@
 # Agent scripts
 
-Reusable scripts and skills for agent workflows across repositories.
+Scripts for agents, shared between my repositories.
 
 ## Skills
 
