@@ -81,6 +81,9 @@ run_case "partial then full: C-u between retries lets retry recover from partial
 run_case "stale echo: prior dispatch's echo in scrollback must not satisfy pre-Enter check" \
     "stale-echo-reader.py" "review 221" 3
 
+run_case "prompt glyph text: empty prompt must not satisfy text landing check" \
+    "stale-echo-reader.py" ">" 3
+
 run_case "NBSP separator: prompt uses U+00A0 between glyph and input" \
     "nbsp-prompt-reader.py" "pr 221" 0
 
@@ -99,6 +102,17 @@ run_case "text with glob metachars: \$TEXT in quoted pattern is matched literall
 
 run_ssh_case "ssh path: text with space survives openssh argv joining" \
     "fake-tui.py" "review 221" 0 10
+
+# `text_at_input_line` only examines lines that start with a prompt glyph,
+# so an exact `last_prompt == TEXT` branch contradicts the input shape. Keep
+# the accepted forms explicit: prompt plus ASCII space, tab, or NBSP.
+if grep -qF '[[ "$last_prompt" == "$TEXT" ]]' scripts/tmux-send.sh; then
+    printf 'FAIL  text_at_input_line contains exact TEXT branch despite prompt anchoring\n'
+    FAIL=$((FAIL + 1))
+else
+    printf 'PASS  text_at_input_line has no exact TEXT branch\n'
+    PASS=$((PASS + 1))
+fi
 
 # --- Flag parsing usage errors ---
 # `set -u` would crash with an unbound-variable diagnostic if --host /
@@ -140,6 +154,26 @@ else
     FAIL=$((FAIL + 1))
 fi
 
+flag_actual=0
+scripts/tmux-send.sh --host "" test-session "review 221" >/dev/null 2>&1 || flag_actual=$?
+if [[ "$flag_actual" == 2 ]]; then
+    printf 'PASS  --host with empty value returns exit 2\n'
+    PASS=$((PASS + 1))
+else
+    printf 'FAIL  --host with empty value (expected exit 2, got %s)\n' "$flag_actual"
+    FAIL=$((FAIL + 1))
+fi
+
+flag_actual=0
+scripts/tmux-send.sh --tmux "" test-session "review 221" >/dev/null 2>&1 || flag_actual=$?
+if [[ "$flag_actual" == 2 ]]; then
+    printf 'PASS  --tmux with empty value returns exit 2\n'
+    PASS=$((PASS + 1))
+else
+    printf 'FAIL  --tmux with empty value (expected exit 2, got %s)\n' "$flag_actual"
+    FAIL=$((FAIL + 1))
+fi
+
 # TEXT containing \r: many TUIs treat CR as Enter, so smuggling it past
 # validation would let TEXT contain a mid-string submit. Reject like \n.
 flag_actual=0
@@ -169,6 +203,23 @@ if [[ "$flag_actual" == 2 ]]; then
     PASS=$((PASS + 1))
 else
     printf 'FAIL  whitespace-only TEXT (expected exit 2, got %s)\n' "$flag_actual"
+    FAIL=$((FAIL + 1))
+fi
+
+stdout_session="tmux-send-test-$$-$RANDOM"
+tmux new-session -d -s "$stdout_session" "python3 scripts/tests/fake-tui.py" 2>/dev/null
+sleep 0.3
+stdout_actual=0
+stdout_text="secret payload"
+stdout_output=$(scripts/tmux-send.sh --tmux tmux "$stdout_session" "$stdout_text" 2>&1) || stdout_actual=$?
+tmux kill-session -t "$stdout_session" 2>/dev/null || true
+if [[ "$stdout_actual" == 0 ]] &&
+    [[ "$stdout_output" != *"$stdout_text"* ]] &&
+    [[ "$stdout_output" == *"len=14"* ]]; then
+    printf 'PASS  success stdout reports length without echoing TEXT\n'
+    PASS=$((PASS + 1))
+else
+    printf 'FAIL  success stdout redaction (exit %s, output: %s)\n' "$stdout_actual" "$stdout_output"
     FAIL=$((FAIL + 1))
 fi
 

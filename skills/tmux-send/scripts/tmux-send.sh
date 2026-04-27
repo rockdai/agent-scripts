@@ -62,14 +62,14 @@ HOST=""
 TMUX_BIN="__AUTO__"
 VERIFY=1
 
-# require_arg checks that flag $1 has a non-flag value at $2; exits 2 if
-# the value is missing OR starts with `-` (which usually means the user
-# forgot a value and the parser is about to silently swallow the next
-# flag — e.g. `tmux-send.sh --host --no-verify dummy text` would set
-# HOST=--no-verify under a naive `[[ $# -lt 2 ]]` check). Avoids both
+# require_arg checks that flag $1 has a non-empty, non-flag value at $2;
+# exits 2 if the value is missing, empty, OR starts with `-` (which usually
+# means the user forgot a value and the parser is about to silently swallow
+# the next flag — e.g. `tmux-send.sh --host --no-verify dummy text` would
+# set HOST=--no-verify under a naive `[[ $# -lt 2 ]]` check). Avoids both
 # the `set -u` unbound-variable crash and the silent flag mis-parse.
 require_arg() {
-    if [[ $# -lt 2 ]] || [[ "$2" == -* ]]; then
+    if [[ $# -lt 2 ]] || [[ -z "$2" ]] || [[ "$2" == -* ]]; then
         echo "tmux-send: $1 requires a value (got: ${2:-<nothing>})" >&2
         exit 2
     fi
@@ -132,9 +132,9 @@ fi
 #   1. Partial-then-full corruption: attempt 1 of `send-keys -l` lands
 #      "re", attempt 2 retypes "review 221" → input buffer becomes
 #      "rereview 221". Substring `grep -qF "review 221"` would pass on
-#      this corrupted line; the end-of-line `*" $TEXT"` / `== $TEXT`
-#      check below rejects it because the char before "review 221" is
-#      "e" (from "rereview"), not space.
+#      this corrupted line; the separator-sensitive end-of-line checks
+#      below reject it because the char before "review 221" is "e" (from
+#      "rereview"), not a supported prompt/input separator.
 #
 #   2. Stale echo from a prior dispatch: the prior `> review 221` is
 #      still visible in the bottom rows, the new `send-keys -l` drops
@@ -163,10 +163,10 @@ text_at_input_line() {
     # blanks. `|| true` swallows grep's exit-1 on no-match so it doesn't
     # trip `set -e`.
     #
-    # End match accepts TEXT alone OR preceded by ASCII space / tab / NBSP
-    # (U+00A0, UTF-8 bytes c2 a0). Different TUIs pad the input differently:
-    # some use ASCII space, some use NBSP between the prompt glyph and the
-    # input buffer, and some box-framed TUIs use tab.
+    # End match accepts TEXT preceded by ASCII space / tab / NBSP (U+00A0,
+    # UTF-8 bytes c2 a0). Different TUIs pad the input differently: some use
+    # ASCII space, some use NBSP between the prompt glyph and the input
+    # buffer, and some box-framed TUIs use tab.
     # The C-u clear at the top of each retry attempt guarantees the input
     # is `[prompt][sep]TEXT` exactly when our send lands, so a permissive
     # whitespace predicate is safe — there's no leftover to concatenate.
@@ -176,7 +176,6 @@ text_at_input_line() {
         | grep -E '^[[:space:]]*(>|\$|›|❯)' \
         | tail -n 1) || true
     [[ -z "$last_prompt" ]] && return 1
-    [[ "$last_prompt" == "$TEXT" ]] && return 0
     [[ "$last_prompt" == *" $TEXT" ]] && return 0
     [[ "$last_prompt" == *$'\t'"$TEXT" ]] && return 0
     [[ "$last_prompt" == *$'\xc2\xa0'"$TEXT" ]] && return 0
@@ -278,4 +277,4 @@ run() {
 }
 
 run
-echo "tmux-send: sent '$TEXT' → $TARGET${HOST:+ on $HOST}"
+echo "tmux-send: sent len=${#TEXT} to $TARGET${HOST:+ on $HOST}"
