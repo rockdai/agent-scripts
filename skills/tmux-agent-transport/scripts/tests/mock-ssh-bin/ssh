@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# mock ssh that reproduces openssh's argv-joining semantics for testing
+# tmux-send.sh's remote dispatch path.
+#
+# Real openssh takes argv[2:] (after host), joins them with spaces into
+# a single string, and sends that string to the remote shell — which
+# re-tokenizes it. This means `ssh host cmd "a b"` becomes remote
+# `cmd a b`, losing the argv boundary around "a b".
+#
+# This shim does the same: ignores the host, joins the remaining argv
+# with spaces, and runs the result via bash -c locally. stdin is
+# forwarded so heredocs on `ssh host bash <<EOF ... EOF` still work.
+
+set -euo pipefail
+
+# Skip any leading -o KEY=VALUE option pairs that real openssh accepts
+# (BatchMode, ConnectTimeout, etc.). tmux-send.sh adds these for fail-fast
+# automation behavior; the mock just ignores them since the test harness
+# doesn't simulate hangs or auth.
+while [[ $# -gt 0 && "$1" == "-o" ]]; do
+    shift 2
+done
+
+shift  # drop host arg
+exec bash -c "$*"

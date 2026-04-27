@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tmux Agent Transport"
+  short_description: "Reliable tmux signaling between agent sessions"
+  default_prompt: "Use $tmux-agent-transport to send a one-line spell to another agent session over tmux."
