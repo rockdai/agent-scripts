@@ -26,9 +26,9 @@ Fetch PR metadata, current head, diff, existing reviews, inline comments, issue 
 ```bash
 gh pr view N --json title,body,headRefName,headRefOid,baseRefName,reviewDecision,url,files
 gh pr diff N
-gh api repos/OWNER/REPO/pulls/N/reviews
-gh api repos/OWNER/REPO/pulls/N/comments
-gh api repos/OWNER/REPO/issues/N/comments
+gh api --paginate repos/OWNER/REPO/pulls/N/reviews
+gh api --paginate repos/OWNER/REPO/pulls/N/comments
+gh api --paginate repos/OWNER/REPO/issues/N/comments
 ```
 
 Use connector or API equivalents when available.

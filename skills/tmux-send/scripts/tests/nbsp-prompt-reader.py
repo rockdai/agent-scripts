@@ -27,7 +27,7 @@ def main() -> None:
         tty.setcbreak(fd)
         sys.stdout.write(PROMPT)
         sys.stdout.flush()
-        buf: list[str] = []
+        buf = []
         while True:
             c = sys.stdin.read(1)
             if not c:

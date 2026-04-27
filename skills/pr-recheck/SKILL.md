@@ -25,8 +25,8 @@ If using GitHub CLI:
 ```bash
 gh pr view N --json headRefOid,reviewDecision,comments,reviews,files
 gh pr diff N
-gh api repos/OWNER/REPO/pulls/N/comments
-gh api repos/OWNER/REPO/issues/N/comments
+gh api --paginate repos/OWNER/REPO/pulls/N/comments
+gh api --paginate repos/OWNER/REPO/issues/N/comments
 ```
 
 Use connector or API equivalents when available.

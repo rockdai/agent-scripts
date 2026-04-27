@@ -17,7 +17,7 @@ def main() -> None:
         sys.stdout.write("> ")
         sys.stdout.flush()
         i = 0
-        buf: list[str] = []
+        buf = []
         while True:
             c = sys.stdin.read(1)
             if not c:

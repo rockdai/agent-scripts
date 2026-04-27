@@ -29,9 +29,9 @@ Project-specific trigger aliases such as `pr N` are compatibility shims. The reu
 Use the best available provider tool for the project. For GitHub, collect all three surfaces:
 
 ```bash
-gh api repos/OWNER/REPO/pulls/N/reviews
-gh api repos/OWNER/REPO/pulls/N/comments
-gh api repos/OWNER/REPO/issues/N/comments
+gh api --paginate repos/OWNER/REPO/pulls/N/reviews
+gh api --paginate repos/OWNER/REPO/pulls/N/comments
+gh api --paginate repos/OWNER/REPO/issues/N/comments
 ```
 
 Also fetch PR metadata and current head:
