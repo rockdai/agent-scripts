@@ -1,4 +1,4 @@
-# agent-scripts
+# Agent scripts
 
 Reusable scripts and skills for agent workflows across repositories.
 
