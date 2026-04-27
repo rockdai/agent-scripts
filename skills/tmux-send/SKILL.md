@@ -27,7 +27,7 @@ This skill does not own:
 - Spawning new agent sessions.
 - Choosing model providers or local/cloud execution modes.
 - The meaning of messages such as `review 12`, `pr 12`, or `merged 12`.
-- PR review rules, issue triage rules, or merge sync rules.
+- PR review rules, issue handling rules, or merge sync rules.
 - Reading another agent's conclusions from a tmux pane.
 
 ## Configuration
@@ -107,8 +107,9 @@ Exit codes:
 
 Constraints:
 
-- `TEXT` must be a single line.
+- `TEXT` must be a non-empty single line, and cannot be whitespace-only.
 - Prefer default verification. Use `--no-verify` only for explicit fire-and-forget cases.
+- The default tmux binary is `tmux` from `PATH`, with `/opt/homebrew/bin/tmux` as a fallback when present. Use `--tmux` for hosts with a different tmux location.
 - For remote dispatch, bootstrap SSH host keys interactively before relying on non-interactive sends.
 
 ## Troubleshooting

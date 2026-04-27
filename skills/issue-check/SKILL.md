@@ -1,9 +1,9 @@
 ---
-name: issue-triage
+name: issue-check
 description: Use when an agent must handle an issue request, including project aliases like "issue N", issue verification, source investigation, reproducing or disproving the report, fixing valid issues, testing, opening a PR, or explaining invalid reports.
 ---
 
-# Issue Triage
+# Issue Check
 
 ## Overview
 

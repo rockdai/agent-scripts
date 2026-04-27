@@ -8,7 +8,7 @@ Reusable scripts and skills for agent workflows across repositories.
 - `skills/pr-review`: perform a full independent pull request review.
 - `skills/pr-recheck`: re-evaluate a pull request after author changes or replies.
 - `skills/merge-sync`: synchronize local agent workspaces after a pull request merge.
-- `skills/issue-triage`: verify and implement work from an issue.
+- `skills/issue-check`: verify and handle work from an issue.
 - `skills/review-notify`: notify a reviewer agent that a pull request needs review or recheck.
 - `skills/tmux-send`: reliable one-line signaling between independent agent sessions through tmux.
 

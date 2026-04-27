@@ -1,0 +1,4 @@
+interface:
+  display_name: "Issue Check"
+  short_description: "Verify an issue and fix or explain it"
+  default_prompt: "Use $issue-check to investigate an issue and handle the result."

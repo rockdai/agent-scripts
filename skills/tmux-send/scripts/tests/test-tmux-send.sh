@@ -21,7 +21,7 @@ run_case() {
     sleep 0.3
 
     local actual=0
-    scripts/tmux-send.sh "$session" "$text" >/dev/null 2>&1 || actual=$?
+    scripts/tmux-send.sh --tmux tmux "$session" "$text" >/dev/null 2>&1 || actual=$?
 
     local pane
     pane=$(tmux capture-pane -p -t "$session" 2>/dev/null || echo "(pane gone)")
@@ -149,6 +149,26 @@ if [[ "$flag_actual" == 2 ]]; then
     PASS=$((PASS + 1))
 else
     printf 'FAIL  TEXT with carriage return (expected exit 2, got %s)\n' "$flag_actual"
+    FAIL=$((FAIL + 1))
+fi
+
+flag_actual=0
+scripts/tmux-send.sh test-session "" >/dev/null 2>&1 || flag_actual=$?
+if [[ "$flag_actual" == 2 ]]; then
+    printf 'PASS  empty TEXT returns exit 2\n'
+    PASS=$((PASS + 1))
+else
+    printf 'FAIL  empty TEXT (expected exit 2, got %s)\n' "$flag_actual"
+    FAIL=$((FAIL + 1))
+fi
+
+flag_actual=0
+scripts/tmux-send.sh test-session "   " >/dev/null 2>&1 || flag_actual=$?
+if [[ "$flag_actual" == 2 ]]; then
+    printf 'PASS  whitespace-only TEXT returns exit 2\n'
+    PASS=$((PASS + 1))
+else
+    printf 'FAIL  whitespace-only TEXT (expected exit 2, got %s)\n' "$flag_actual"
     FAIL=$((FAIL + 1))
 fi
 

@@ -19,9 +19,8 @@
 #
 # Flags:
 #   --host HOST     run tmux over SSH on HOST (omit for local tmux)
-#   --tmux PATH     tmux binary path on target (default: /opt/homebrew/bin/tmux,
-#                   the homebrew install location; override when the target box
-#                   has tmux elsewhere)
+#   --tmux PATH     tmux binary path on target (default: tmux from PATH, then
+#                   /opt/homebrew/bin/tmux if present)
 #   --no-verify     skip the post-Enter verification (fire-and-forget);
 #                   pre-Enter verification still runs
 #
@@ -60,7 +59,7 @@ usage_error() {
 }
 
 HOST=""
-TMUX_BIN="/opt/homebrew/bin/tmux"
+TMUX_BIN="__AUTO__"
 VERIFY=1
 
 # require_arg checks that flag $1 has a non-flag value at $2; exits 2 if
@@ -92,6 +91,11 @@ done
 TARGET="$1"
 TEXT="$2"
 
+if [[ -z "${TEXT//[[:space:]]/}" ]]; then
+    echo "tmux-send: TEXT cannot be empty or whitespace-only" >&2
+    exit 2
+fi
+
 case "$TEXT" in
     *$'\n'*|*$'\r'*)
         # Reject both LF and CR. CR also acts like Enter in many TUIs,
@@ -107,6 +111,16 @@ set -euo pipefail
 # Do NOT name this TMUX — that variable is reserved: tmux client reads
 # it to resolve the containing session, and TMUX_CMD is a binary path.
 unset TMUX
+
+if [[ "$TMUX_CMD" == "__AUTO__" ]]; then
+    if command -v tmux >/dev/null 2>&1; then
+        TMUX_CMD="$(command -v tmux)"
+    elif [[ -x /opt/homebrew/bin/tmux ]]; then
+        TMUX_CMD="/opt/homebrew/bin/tmux"
+    else
+        TMUX_CMD="tmux"
+    fi
+fi
 
 # True if TEXT is the trailing content of the CURRENT input line.
 #
