@@ -1,4 +1,0 @@
-interface:
-  display_name: "Tmux Send"
-  short_description: "Reliable tmux signaling between agent sessions"
-  default_prompt: "Use $tmux-send to send a one-line message to another agent session over tmux."

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Merge Sync"
-  short_description: "Synchronize an agent workspace after PR merge"
-  default_prompt: "Use $merge-sync to update local state after a pull request has merged."

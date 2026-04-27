@@ -1,4 +1,0 @@
-interface:
-  display_name: "PR Recheck"
-  short_description: "Re-evaluate a PR after feedback or new commits"
-  default_prompt: "Use $pr-recheck to verify review feedback closure on a pull request."
