@@ -1,0 +1,4 @@
+interface:
+  display_name: "PR Feedback"
+  short_description: "Fetch, judge, and respond to PR review feedback"
+  default_prompt: "Use $pr-feedback to process every reviewer comment on a pull request."

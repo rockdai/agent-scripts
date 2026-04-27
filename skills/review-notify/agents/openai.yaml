@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Notify"
+  short_description: "Notify reviewer or author agents about PR state"
+  default_prompt: "Use $review-notify to dispatch the next PR workflow message."

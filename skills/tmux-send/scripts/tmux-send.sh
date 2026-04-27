@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # tmux-send.sh — send text to a tmux pane and make sure it actually lands.
 #
-# Naive `tmux send-keys -t T "text" Enter` races against TUI render ticks
-# (Codex CLI, Claude Code, Gemini CLI, etc.) two ways:
+# Naive `tmux send-keys -t T "text" Enter` races against agent TUI render ticks
+# two ways:
 #   1. Enter fires before the typed text commits → the command stays
 #      stranded in the input box (the original motivating bug).
 #   2. The TUI ingests part of the text, then Enter catches whatever is
-#      already in its buffer → a truncated spell submits silently, and a
+#      already in its buffer → a truncated message submits silently, and a
 #      naive "did the text disappear from pane" check returns success.
 #
 # This script handles both: it sends the literal text, polls
@@ -96,7 +96,7 @@ case "$TEXT" in
     *$'\n'*|*$'\r'*)
         # Reject both LF and CR. CR also acts like Enter in many TUIs,
         # so smuggling `\r` past validation would let TEXT contain a
-        # mid-string submit and break the single-line spell contract.
+        # mid-string submit and break the single-line message contract.
         echo "tmux-send: TEXT cannot contain newlines or carriage returns" >&2
         exit 2
         ;;
@@ -130,9 +130,9 @@ unset TMUX
 #      because the stale echo lives ABOVE the freshly drawn prompt.
 #
 # Separator scope: ASCII space, tab, or NBSP (U+00A0) between prompt
-# glyph and TEXT. Different TUIs pad the input area differently — Claude
-# Code / Gemini CLI use ASCII space, Codex CLI uses NBSP, some box-framed
-# TUIs use tab. Each accepted form has its own bash glob branch in
+# glyph and TEXT. Different TUIs pad the input area differently: some use
+# ASCII space, some use NBSP, and some box-framed TUIs use tab. Each
+# accepted form has its own bash glob branch in
 # `text_at_input_line` below; if a future TUI uses yet another separator
 # (en/em space, etc.), add a new branch matching its byte sequence.
 #
@@ -151,8 +151,8 @@ text_at_input_line() {
     #
     # End match accepts TEXT alone OR preceded by ASCII space / tab / NBSP
     # (U+00A0, UTF-8 bytes c2 a0). Different TUIs pad the input differently:
-    # Claude Code / Gemini CLI use ASCII space; Codex CLI uses NBSP between
-    # the prompt glyph and the input buffer; some box-framed TUIs use tab.
+    # some use ASCII space, some use NBSP between the prompt glyph and the
+    # input buffer, and some box-framed TUIs use tab.
     # The C-u clear at the top of each retry attempt guarantees the input
     # is `[prompt][sep]TEXT` exactly when our send lands, so a permissive
     # whitespace predicate is safe — there's no leftover to concatenate.

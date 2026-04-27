@@ -12,7 +12,7 @@ This reproduces the failure qa-agent raised on PR #221 head 6273c3e:
   3. The script presses Enter on the empty buffer, the stub printed
      status lines scroll the stale echo out of the 3-row post-Enter
      window, post-check thinks the text "left" the input → exit 0.
-  4. The caller never learns its spell was eaten.
+  4. The caller never learns its message was eaten.
 
 Fix this fixture guards: the pre-Enter (and post-Enter) verify must anchor
 to the CURRENT input line specifically — i.e. the LAST line in the pane
@@ -49,8 +49,8 @@ def main() -> None:
                     sys.stdout.write(f"[status {i}]\n")
                 sys.stdout.write("[SUBMIT len=0]\n> ")
                 sys.stdout.flush()
-            # Drop everything else — modeling a TUI that fully eats
-            # typed chars (Codex CLI under heavy render-tick pressure).
+            # Drop everything else, modeling a TUI that fully eats typed
+            # chars under heavy render-tick pressure.
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
 

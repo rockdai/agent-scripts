@@ -1,5 +1,5 @@
 """TUI that silently drops every 3rd char, reproducing the partial-text
-failure mode observed when Codex CLI eats chars under load. Used by
+failure mode observed when an agent TUI eats chars under load. Used by
 test-tmux-send.sh to lock tmux-send.sh's pre-Enter verification: the
 script must detect that the full text never landed and exit 3, not
 silently return 0 with a truncated dispatch."""

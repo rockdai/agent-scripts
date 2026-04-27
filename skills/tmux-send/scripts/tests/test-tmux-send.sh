@@ -81,7 +81,7 @@ run_case "partial then full: C-u between retries lets retry recover from partial
 run_case "stale echo: prior dispatch's echo in scrollback must not satisfy pre-Enter check" \
     "stale-echo-reader.py" "review 221" 3
 
-run_case "NBSP separator: real Codex prompt uses U+00A0 between glyph and input" \
+run_case "NBSP separator: prompt uses U+00A0 between glyph and input" \
     "nbsp-prompt-reader.py" "pr 221" 0
 
 run_case "text with single quote: printf %q escaping preserves apostrophe" \
@@ -145,7 +145,7 @@ fi
 flag_actual=0
 scripts/tmux-send.sh test-session $'hello\rworld' >/dev/null 2>&1 || flag_actual=$?
 if [[ "$flag_actual" == 2 ]]; then
-    printf 'PASS  TEXT with carriage return returns exit 2 (single-line contract)\n'
+    printf 'PASS  TEXT with carriage return returns exit 2 (single-line message contract)\n'
     PASS=$((PASS + 1))
 else
     printf 'FAIL  TEXT with carriage return (expected exit 2, got %s)\n' "$flag_actual"

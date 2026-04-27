@@ -1,15 +1,17 @@
 ---
-name: tmux-agent-transport
-description: Reliable one-line signaling between independent agent sessions through tmux. Use when an agent needs to send a short command, spell, or handoff message to another agent running in a local or remote tmux session, or when installing, validating, or troubleshooting scripts/tmux-send.sh for agent-to-agent dispatch.
+name: tmux-send
+description: Use when an agent needs to send a short one-line command, trigger alias, or handoff message to another agent running in a local or remote tmux session, or when installing, validating, or troubleshooting scripts/tmux-send.sh.
 ---
 
-# Tmux Agent Transport
+# Tmux Send
 
 ## Overview
 
 Use tmux only as a transport for short, one-line signals between already-running agent sessions. Do not use tmux pane contents as the source of truth for decisions, findings, or status; durable project systems such as PR comments, issues, commits, and logs must hold the actual record.
 
 This skill provides `scripts/tmux-send.sh`, a safer wrapper around `tmux send-keys` that verifies the text reaches the target TUI input line before pressing Enter.
+
+This skill assumes the target agent sessions already exist. It borrows only the lightweight tmux operations that are useful for persistent sessions: list sessions, capture recent output for troubleshooting, attach when a human needs to watch live, and kill stale sessions when the project explicitly allows it. It does not introduce a generic agent spawner or model launcher.
 
 ## Boundary
 
@@ -22,6 +24,8 @@ This skill owns:
 
 This skill does not own:
 
+- Spawning new agent sessions.
+- Choosing model providers or local/cloud execution modes.
 - The meaning of messages such as `review 12`, `pr 12`, or `merged 12`.
 - PR review rules, issue triage rules, or merge sync rules.
 - Reading another agent's conclusions from a tmux pane.
@@ -32,7 +36,7 @@ Read the consuming repository's agent docs before dispatching. Look for:
 
 - Agent role names and target tmux sessions.
 - Hostnames for remote sessions.
-- Allowed message/spell names.
+- Allowed message names or trigger aliases.
 - Fallback commands for status checks.
 - Whether tmux transport is allowed for the task.
 
@@ -60,18 +64,31 @@ If no mapping exists, ask the human for the target host/session before sending a
 
 2. Choose the target from the project mapping.
 
-   Use the role and spell semantics from the consuming project. Do not invent new spell names unless the project explicitly asks for them.
+   Use the role and message semantics from the consuming project. Do not invent new trigger aliases unless the project explicitly asks for them.
 
 3. Send exactly one line.
 
    ```bash
-   skills/tmux-agent-transport/scripts/tmux-send.sh <session> "<message>"
-   skills/tmux-agent-transport/scripts/tmux-send.sh --host <host> <session> "<message>"
+   skills/tmux-send/scripts/tmux-send.sh <session> "<message>"
+   skills/tmux-send/scripts/tmux-send.sh --host <host> <session> "<message>"
    ```
 
 4. Treat any non-zero exit as a dispatch failure.
 
    Do not continue as if the peer was notified. Inspect the error, run the fallback status command if the project defines one, and report the failed dispatch in the durable project record when it matters.
+
+## Session Checks
+
+Use these only for transport troubleshooting or human observation. They are not substitutes for PR comments, issues, commits, or logs.
+
+```bash
+tmux list-sessions
+tmux capture-pane -t <session> -p -S -50
+tmux attach -t <session>
+tmux kill-session -t <session>
+```
+
+Do not kill a session unless it is clearly stale or the project/human asked for cleanup.
 
 ## Script Contract
 
@@ -108,8 +125,8 @@ Never replace the script with bare `tmux send-keys` for agent dispatch. Bare sen
 After copying or editing the script, run:
 
 ```bash
-skills/tmux-agent-transport/scripts/tmux-send.sh --help
-skills/tmux-agent-transport/scripts/tests/test-tmux-send.sh
+skills/tmux-send/scripts/tmux-send.sh --help
+skills/tmux-send/scripts/tests/test-tmux-send.sh
 ```
 
 The smoke tests require local `tmux` and `python3`.

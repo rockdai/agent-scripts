@@ -1,0 +1,4 @@
+interface:
+  display_name: "Issue Triage"
+  short_description: "Verify an issue and fix or explain it"
+  default_prompt: "Use $issue-triage to investigate an issue and handle the result."

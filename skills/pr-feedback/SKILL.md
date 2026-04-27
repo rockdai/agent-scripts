@@ -1,9 +1,9 @@
 ---
-name: address-pr-feedback
-description: Process pull request feedback end to end. Use when receiving a request such as "pr N", when a review agent notifies the author that a review or recheck is complete, or when an agent must fetch all PR reviews/comments, independently judge every finding, make fixes, reply Fixed or Won't fix, create follow-up issues for out-of-scope problems, and trigger any project-specific recheck notification.
+name: pr-feedback
+description: Use when a pull request author must process review feedback, including project aliases like "pr N", reviewer callbacks, human comments, bot findings, threaded review comments, Fixed/Won't fix replies, follow-up issues, or recheck requests.
 ---
 
-# Address PR Feedback
+# PR Feedback
 
 ## Overview
 
@@ -21,6 +21,8 @@ Read the consuming repository's agent instructions first. In particular, find:
 - The transport skill or script used for notification, if any.
 
 Do not rely on another agent's chat transcript or tmux pane output. If the feedback is not in the PR, ask that it be written there before treating it as official review input.
+
+Project-specific trigger aliases such as `pr N` are compatibility shims. The reusable concept is "process PR feedback"; do not require other projects to adopt the same alias names.
 
 ## Fetch Feedback
 
@@ -99,7 +101,7 @@ After all replies and commits are visible on the PR, follow the consuming reposi
 - Requesting another review from a human or bot.
 - Leaving the PR ready for manual merge.
 
-If the project uses tmux for agent notification, use the `tmux-agent-transport` skill and the project-local routing table. Do not hardcode hostnames or session names in this skill.
+If the project uses tmux for agent notification, use the `tmux-send` skill and the project-local routing table. Do not hardcode hostnames or session names in this skill.
 
 ## Stop Conditions
 
