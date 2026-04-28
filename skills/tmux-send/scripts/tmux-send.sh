@@ -15,12 +15,16 @@
 # Any step that won't converge exits 3 so the caller knows to intervene.
 #
 # Usage:
-#   scripts/tmux-send.sh [--host HOST] [--tmux PATH] [--no-verify] TARGET TEXT
+#   scripts/tmux-send.sh [--host HOST] [--tmux PATH] [--prompt-regex ERE]
+#                       [--no-verify] TARGET TEXT
 #
 # Flags:
 #   --host HOST     run tmux over SSH on HOST (omit for local tmux)
 #   --tmux PATH     tmux binary path on target (default: tmux from PATH, then
 #                   /opt/homebrew/bin/tmux if present)
+#   --prompt-regex ERE
+#                   extended regex for the prompt glyph/token that starts the
+#                   target TUI input line (default: >|\$|›|❯)
 #   --no-verify     skip the post-Enter verification (fire-and-forget);
 #                   pre-Enter verification still runs
 #
@@ -60,6 +64,7 @@ usage_error() {
 
 HOST=""
 TMUX_BIN="__AUTO__"
+PROMPT_REGEX='>|\$|›|❯'
 VERIFY=1
 
 # require_arg checks that flag $1 has a non-empty, non-flag value at $2;
@@ -77,13 +82,14 @@ require_arg() {
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --host)       require_arg "$@"; HOST="$2"; shift 2 ;;
-        --tmux)       require_arg "$@"; TMUX_BIN="$2"; shift 2 ;;
-        --no-verify)  VERIFY=0; shift ;;
-        -h|--help)    help_text; exit 0 ;;
-        --)           shift; break ;;
-        -*)           echo "tmux-send: unknown flag: $1" >&2; usage_error ;;
-        *)            break ;;
+        --host)          require_arg "$@"; HOST="$2"; shift 2 ;;
+        --tmux)          require_arg "$@"; TMUX_BIN="$2"; shift 2 ;;
+        --prompt-regex)  require_arg "$@"; PROMPT_REGEX="$2"; shift 2 ;;
+        --no-verify)     VERIFY=0; shift ;;
+        -h|--help)       help_text; exit 0 ;;
+        --)              shift; break ;;
+        -*)              echo "tmux-send: unknown flag: $1" >&2; usage_error ;;
+        *)               break ;;
     esac
 done
 
@@ -125,9 +131,9 @@ fi
 # True if TEXT is the trailing content of the CURRENT input line.
 #
 # "Current input line" = the LAST non-blank pane line whose first
-# non-whitespace char is a prompt glyph (`> $ › ❯`). Anchoring to the
-# last prompt line — instead of "anywhere in the bottom N rows" — is
-# load-bearing for two distinct failure modes:
+# non-whitespace chars match PROMPT_REGEX. Anchoring to the last prompt
+# line — instead of "anywhere in the bottom N rows" — is load-bearing for
+# two distinct failure modes:
 #
 #   1. Partial-then-full corruption: attempt 1 of `send-keys -l` lands
 #      "re", attempt 2 retypes "review 221" → input buffer becomes
@@ -143,19 +149,19 @@ fi
 #      line makes the new (empty) prompt line the comparison target,
 #      because the stale echo lives ABOVE the freshly drawn prompt.
 #
-# Separator scope: ASCII space, tab, or NBSP (U+00A0) between prompt
-# glyph and TEXT. Different TUIs pad the input area differently: some use
+# Separator scope: ASCII space, tab, and common Unicode spaces between
+# prompt and TEXT. Different TUIs pad the input area differently: some use
 # ASCII space, some use NBSP, and some box-framed TUIs use tab. Each
-# accepted form has its own bash glob branch in
-# `text_at_input_line` below; if a future TUI uses yet another separator
-# (en/em space, etc.), add a new branch matching its byte sequence.
+# accepted form has its own bash glob branch in `text_at_input_line`
+# below. If a future TUI uses a different prompt token, pass
+# --prompt-regex instead of editing this script.
 #
 # Used for both pre-Enter verification (has the typed text landed at the
 # end of the input line?) and post-Enter verification (has it left the
 # input line?).
 text_at_input_line() {
     # Find the LAST non-blank line in the pane whose first non-whitespace
-    # char is a prompt glyph (`> $ › ❯`), then check if it ends with TEXT.
+    # chars match PROMPT_REGEX, then check if it ends with TEXT.
     #
     # `grep -E` with the alternation handles the multi-byte UTF-8 chars
     # (›, ❯) by byte sequence; awk strips blank pad lines first because
@@ -163,22 +169,28 @@ text_at_input_line() {
     # blanks. `|| true` swallows grep's exit-1 on no-match so it doesn't
     # trip `set -e`.
     #
-    # End match accepts TEXT preceded by ASCII space / tab / NBSP (U+00A0,
-    # UTF-8 bytes c2 a0). Different TUIs pad the input differently: some use
-    # ASCII space, some use NBSP between the prompt glyph and the input
-    # buffer, and some box-framed TUIs use tab.
+    # End match accepts TEXT preceded by ASCII space / tab / common Unicode
+    # spaces. Different TUIs pad the input differently: some use ASCII
+    # space, some use NBSP between the prompt glyph and the input buffer,
+    # and some box-framed TUIs use tab.
     # The C-u clear at the top of each retry attempt guarantees the input
     # is `[prompt][sep]TEXT` exactly when our send lands, so a permissive
     # whitespace predicate is safe — there's no leftover to concatenate.
     local last_prompt
     last_prompt=$("$TMUX_CMD" capture-pane -p -t "$TARGET" \
         | awk 'NF' \
-        | grep -E '^[[:space:]]*(>|\$|›|❯)' \
+        | grep -E "^[[:space:]]*($PROMPT_REGEX)" \
         | tail -n 1) || true
     [[ -z "$last_prompt" ]] && return 1
     [[ "$last_prompt" == *" $TEXT" ]] && return 0
     [[ "$last_prompt" == *$'\t'"$TEXT" ]] && return 0
     [[ "$last_prompt" == *$'\xc2\xa0'"$TEXT" ]] && return 0
+    [[ "$last_prompt" == *$'\xe2\x80\x82'"$TEXT" ]] && return 0
+    [[ "$last_prompt" == *$'\xe2\x80\x83'"$TEXT" ]] && return 0
+    [[ "$last_prompt" == *$'\xe2\x80\x87'"$TEXT" ]] && return 0
+    [[ "$last_prompt" == *$'\xe2\x80\x89'"$TEXT" ]] && return 0
+    [[ "$last_prompt" == *$'\xe2\x80\xaf'"$TEXT" ]] && return 0
+    [[ "$last_prompt" == *$'\xe3\x80\x80'"$TEXT" ]] && return 0
     return 1
 }
 
@@ -258,8 +270,8 @@ run() {
     # truncating TEXT. printf '%q' produces a shell-safe literal that
     # survives the round-trip intact. Script body is delivered on stdin.
     local prefix script
-    printf -v prefix 'TMUX_CMD=%q\nTARGET=%q\nTEXT=%q\nVERIFY=%q\n' \
-        "$TMUX_BIN" "$TARGET" "$TEXT" "$VERIFY"
+    printf -v prefix 'TMUX_CMD=%q\nTARGET=%q\nTEXT=%q\nVERIFY=%q\nPROMPT_REGEX=%q\n' \
+        "$TMUX_BIN" "$TARGET" "$TEXT" "$VERIFY" "$PROMPT_REGEX"
     script="$prefix$REMOTE_BODY"
 
     if [[ -n "$HOST" ]]; then

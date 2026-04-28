@@ -15,13 +15,14 @@ FAIL=0
 
 run_case() {
     local name="$1" reader="$2" text="$3" expected="$4"
+    shift 4
     local session="tmux-send-test-$$-$RANDOM"
 
     tmux new-session -d -s "$session" "python3 scripts/tests/$reader" 2>/dev/null
     sleep 0.3
 
     local actual=0
-    scripts/tmux-send.sh --tmux tmux "$session" "$text" >/dev/null 2>&1 || actual=$?
+    scripts/tmux-send.sh --tmux tmux "$@" "$session" "$text" >/dev/null 2>&1 || actual=$?
 
     local pane
     pane=$(tmux capture-pane -p -t "$session" 2>/dev/null || echo "(pane gone)")
@@ -87,6 +88,9 @@ run_case "prompt glyph text: empty prompt must not satisfy text landing check" \
 run_case "NBSP separator: prompt uses U+00A0 between glyph and input" \
     "nbsp-prompt-reader.py" "pr 221" 0
 
+run_case "custom prompt regex: lambda prompt with figure-space separator" \
+    "custom-prompt-reader.py" "pr 221" 0 --prompt-regex "λ"
+
 run_case "text with single quote: printf %q escaping preserves apostrophe" \
     "fake-tui.py" "it's fine" 0
 
@@ -137,6 +141,16 @@ if [[ "$flag_actual" == 2 ]]; then
     PASS=$((PASS + 1))
 else
     printf 'FAIL  --tmux without value (expected exit 2, got %s)\n' "$flag_actual"
+    FAIL=$((FAIL + 1))
+fi
+
+flag_actual=0
+scripts/tmux-send.sh --prompt-regex >/dev/null 2>&1 || flag_actual=$?
+if [[ "$flag_actual" == 2 ]]; then
+    printf 'PASS  --prompt-regex without value returns exit 2 (not unbound-variable crash)\n'
+    PASS=$((PASS + 1))
+else
+    printf 'FAIL  --prompt-regex without value (expected exit 2, got %s)\n' "$flag_actual"
     FAIL=$((FAIL + 1))
 fi
 

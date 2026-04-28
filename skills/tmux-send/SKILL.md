@@ -95,7 +95,7 @@ Do not kill a session unless it is clearly stale or the project/human asked for 
 `scripts/tmux-send.sh` accepts:
 
 ```bash
-scripts/tmux-send.sh [--host HOST] [--tmux PATH] [--no-verify] TARGET TEXT
+scripts/tmux-send.sh [--host HOST] [--tmux PATH] [--prompt-regex ERE] [--no-verify] TARGET TEXT
 ```
 
 Exit codes:
@@ -110,13 +110,14 @@ Constraints:
 - `TEXT` must be a non-empty single line, and cannot be whitespace-only.
 - Prefer default verification. Use `--no-verify` only for explicit fire-and-forget cases.
 - The default tmux binary is `tmux` from `PATH`, with `/opt/homebrew/bin/tmux` as a fallback when present. Use `--tmux` for hosts with a different tmux location.
+- The default prompt matcher recognizes `>`, `$`, `›`, and `❯`. Use `--prompt-regex` when the target TUI uses a different prompt token.
 - For remote dispatch, bootstrap SSH host keys interactively before relying on non-interactive sends.
 
 ## Troubleshooting
 
 - `Host key verification failed`: SSH to the target host once interactively and accept the host key.
 - `tmux target not found`: verify the session name and the tmux binary path.
-- Exit `3`: capture the target pane and check whether the TUI prompt is blocked, not focused, or rendering with an unsupported prompt shape.
+- Exit `3`: capture the target pane and check whether the TUI prompt is blocked, not focused, or needs a project-specific `--prompt-regex`.
 - Text appears typed but not submitted: rerun without `--no-verify`, then inspect the pane.
 
 Never replace the script with bare `tmux send-keys` for agent dispatch. Bare sends can race agent TUIs and silently submit partial or stale text.
