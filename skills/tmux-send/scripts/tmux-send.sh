@@ -206,8 +206,9 @@ text_at_input_line() {
     # `grep -E` with the alternation handles the multi-byte UTF-8 chars
     # (›, ❯) by byte sequence; awk strips blank pad lines first because
     # `capture-pane -p` pads up to the pane's row count with trailing
-    # blanks. `|| true` swallows grep's exit-1 on no-match so it doesn't
-    # trip `set -e`.
+    # blanks. Run the pipeline under `set +e`, capture grep's exit status,
+    # treat exit 1 as "no prompt match", and let exit >1 surface as an
+    # invalid `--prompt-regex` error.
     #
     # End match accepts TEXT preceded by ASCII space / tab / common Unicode
     # spaces. Different TUIs pad the input differently: some use ASCII
