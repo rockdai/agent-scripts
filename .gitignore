@@ -1,0 +1,15 @@
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+.coverage
+coverage/
+htmlcov/
+*.log
