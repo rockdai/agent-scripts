@@ -88,8 +88,8 @@ run_case "prompt glyph text: empty prompt must not satisfy text landing check" \
 run_case "NBSP separator: prompt uses U+00A0 between glyph and input" \
     "nbsp-prompt-reader.py" "pr 221" 0
 
-run_case "custom prompt regex: lambda prompt with figure-space separator" \
-    "custom-prompt-reader.py" "pr 221" 0 --prompt-regex "λ"
+run_case "custom prompt regex: leading-dash prompt with figure-space separator" \
+    "custom-prompt-reader.py" "pr 221" 0 --prompt-regex "->"
 
 run_case "text with single quote: printf %q escaping preserves apostrophe" \
     "fake-tui.py" "it's fine" 0
@@ -151,6 +151,26 @@ if [[ "$flag_actual" == 2 ]]; then
     PASS=$((PASS + 1))
 else
     printf 'FAIL  --prompt-regex without value (expected exit 2, got %s)\n' "$flag_actual"
+    FAIL=$((FAIL + 1))
+fi
+
+flag_actual=0
+scripts/tmux-send.sh --prompt-regex= >/dev/null 2>&1 || flag_actual=$?
+if [[ "$flag_actual" == 2 ]]; then
+    printf 'PASS  --prompt-regex= with empty value returns exit 2\n'
+    PASS=$((PASS + 1))
+else
+    printf 'FAIL  --prompt-regex= with empty value (expected exit 2, got %s)\n' "$flag_actual"
+    FAIL=$((FAIL + 1))
+fi
+
+flag_actual=0
+scripts/tmux-send.sh --prompt-regex '[' test-session "review 221" >/dev/null 2>&1 || flag_actual=$?
+if [[ "$flag_actual" == 2 ]]; then
+    printf 'PASS  invalid --prompt-regex returns exit 2 before tmux dispatch\n'
+    PASS=$((PASS + 1))
+else
+    printf 'FAIL  invalid --prompt-regex (expected exit 2, got %s)\n' "$flag_actual"
     FAIL=$((FAIL + 1))
 fi
 

@@ -95,7 +95,7 @@ Do not kill a session unless it is clearly stale or the project/human asked for 
 `scripts/tmux-send.sh` accepts:
 
 ```bash
-scripts/tmux-send.sh [--host HOST] [--tmux PATH] [--prompt-regex ERE] [--no-verify] TARGET TEXT
+scripts/tmux-send.sh [--host HOST] [--tmux PATH] [--prompt-regex ERE] [--prompt-regex=ERE] [--no-verify] TARGET TEXT
 ```
 
 Exit codes:
@@ -110,7 +110,7 @@ Constraints:
 - `TEXT` must be a non-empty single line, and cannot be whitespace-only.
 - Prefer default verification. Use `--no-verify` only for explicit fire-and-forget cases.
 - The default tmux binary is `tmux` from `PATH`, with `/opt/homebrew/bin/tmux` as a fallback when present. Use `--tmux` for hosts with a different tmux location.
-- The default prompt matcher recognizes `>`, `$`, `›`, and `❯`. Use `--prompt-regex` when the target TUI uses a different prompt token.
+- The default prompt matcher recognizes `>`, `$`, `›`, and `❯`. Use `--prompt-regex` when the target TUI uses a different prompt token. Use `--prompt-regex=ERE` when the pattern itself starts with `--`.
 - For remote dispatch, bootstrap SSH host keys interactively before relying on non-interactive sends.
 
 ## Troubleshooting

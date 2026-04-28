@@ -2,7 +2,8 @@
 
 The default prompt matcher intentionally stays conservative to avoid
 matching ordinary log lines as input prompts. This fixture verifies that
-callers can opt into a custom prompt regex without editing tmux-send.sh.
+callers can opt into a custom prompt regex, including one that starts
+with a dash, without editing tmux-send.sh.
 """
 
 import sys
@@ -10,7 +11,7 @@ import termios
 import tty
 
 
-PROMPT = "\u03bb\u2007"  # Greek lambda + figure space.
+PROMPT = "->\u2007"  # Dash prompt + figure space.
 
 
 def main() -> None:

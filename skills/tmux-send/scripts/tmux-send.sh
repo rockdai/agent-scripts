@@ -16,13 +16,14 @@
 #
 # Usage:
 #   scripts/tmux-send.sh [--host HOST] [--tmux PATH] [--prompt-regex ERE]
+#                       [--prompt-regex=ERE]
 #                       [--no-verify] TARGET TEXT
 #
 # Flags:
 #   --host HOST     run tmux over SSH on HOST (omit for local tmux)
 #   --tmux PATH     tmux binary path on target (default: tmux from PATH, then
 #                   /opt/homebrew/bin/tmux if present)
-#   --prompt-regex ERE
+#   --prompt-regex ERE, --prompt-regex=ERE
 #                   extended regex for the prompt glyph/token that starts the
 #                   target TUI input line (default: >|\$|›|❯)
 #   --no-verify     skip the post-Enter verification (fire-and-forget);
@@ -80,11 +81,27 @@ require_arg() {
     fi
 }
 
+require_prompt_regex_arg() {
+    if [[ $# -lt 2 ]] || [[ -z "$2" ]] || [[ "$2" == --* ]]; then
+        echo "tmux-send: $1 requires a value (got: ${2:-<nothing>})" >&2
+        exit 2
+    fi
+}
+
+set_prompt_regex() {
+    if [[ -z "$1" ]]; then
+        echo "tmux-send: --prompt-regex requires a non-empty value" >&2
+        exit 2
+    fi
+    PROMPT_REGEX="$1"
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --host)          require_arg "$@"; HOST="$2"; shift 2 ;;
         --tmux)          require_arg "$@"; TMUX_BIN="$2"; shift 2 ;;
-        --prompt-regex)  require_arg "$@"; PROMPT_REGEX="$2"; shift 2 ;;
+        --prompt-regex=*) set_prompt_regex "${1#--prompt-regex=}"; shift ;;
+        --prompt-regex)  require_prompt_regex_arg "$@"; set_prompt_regex "$2"; shift 2 ;;
         --no-verify)     VERIFY=0; shift ;;
         -h|--help)       help_text; exit 0 ;;
         --)              shift; break ;;
@@ -111,6 +128,29 @@ case "$TEXT" in
         exit 2
         ;;
 esac
+
+validate_prompt_regex() {
+    local status
+
+    case "$PROMPT_REGEX" in
+        *$'\n'*|*$'\r'*)
+            echo "tmux-send: --prompt-regex cannot contain newlines or carriage returns" >&2
+            exit 2
+            ;;
+    esac
+
+    set +e
+    printf '\n' | grep -E -- "^[[:space:]]*($PROMPT_REGEX)" >/dev/null 2>&1
+    status=$?
+    set -e
+
+    if [[ "$status" -gt 1 ]]; then
+        echo "tmux-send: invalid --prompt-regex: $PROMPT_REGEX" >&2
+        exit 2
+    fi
+}
+
+validate_prompt_regex
 
 REMOTE_BODY=$(cat <<'REMOTE'
 set -euo pipefail
@@ -176,11 +216,24 @@ text_at_input_line() {
     # The C-u clear at the top of each retry attempt guarantees the input
     # is `[prompt][sep]TEXT` exactly when our send lands, so a permissive
     # whitespace predicate is safe — there's no leftover to concatenate.
-    local last_prompt
-    last_prompt=$("$TMUX_CMD" capture-pane -p -t "$TARGET" \
+    local grep_status last_prompt pane prompt_lines
+    pane=$("$TMUX_CMD" capture-pane -p -t "$TARGET")
+
+    set +e
+    prompt_lines=$(printf '%s\n' "$pane" \
         | awk 'NF' \
-        | grep -E "^[[:space:]]*($PROMPT_REGEX)" \
-        | tail -n 1) || true
+        | grep -E -- "^[[:space:]]*($PROMPT_REGEX)")
+    grep_status=$?
+    set -e
+
+    if [[ "$grep_status" -eq 1 ]]; then
+        return 1
+    elif [[ "$grep_status" -gt 1 ]]; then
+        echo "tmux-send: invalid --prompt-regex: $PROMPT_REGEX" >&2
+        exit 2
+    fi
+
+    last_prompt=$(printf '%s\n' "$prompt_lines" | tail -n 1)
     [[ -z "$last_prompt" ]] && return 1
     [[ "$last_prompt" == *" $TEXT" ]] && return 0
     [[ "$last_prompt" == *$'\t'"$TEXT" ]] && return 0
