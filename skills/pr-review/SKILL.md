@@ -21,7 +21,9 @@ Read the consuming repository's agent instructions first. Identify:
 - How reviewer results must be written to the PR.
 - How to notify the author agent after the review.
 
-Fetch PR metadata, current head, diff, existing reviews, inline comments, issue comments, checks, and linked issue context. If using GitHub CLI, start with:
+Fetch PR metadata, current head, diff, existing reviews, inline comments, issue comments, checks, and linked issue context.
+
+**Tool selection.** Prefer the local `gh` CLI for all GitHub interactions; it is the lowest-friction, best-authenticated path on most workstations. Fall back to a GitHub MCP server or connector tool only when `gh` is missing, unauthenticated, or the required call has no `gh` equivalent. Do not start with a connector when `gh` would work.
 
 ```bash
 gh pr view N --json title,body,headRefName,headRefOid,baseRefName,reviewDecision,url,files
@@ -30,8 +32,6 @@ gh api --paginate repos/OWNER/REPO/pulls/N/reviews
 gh api --paginate repos/OWNER/REPO/pulls/N/comments
 gh api --paginate repos/OWNER/REPO/issues/N/comments
 ```
-
-Use connector or API equivalents when available.
 
 ## Review Scope
 

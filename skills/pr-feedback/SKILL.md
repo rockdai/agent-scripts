@@ -26,7 +26,9 @@ Project-specific trigger aliases such as `pr N` are compatibility shims. The reu
 
 ## Fetch Feedback
 
-Use the best available provider tool for the project. For GitHub, collect all three surfaces:
+**Tool selection.** Prefer the local `gh` CLI for all GitHub interactions; it is the lowest-friction, best-authenticated path on most workstations. Fall back to a GitHub MCP server or connector tool only when `gh` is missing, unauthenticated, or the required call has no `gh` equivalent. Do not start with a connector when `gh` would work.
+
+For GitHub, collect all three surfaces:
 
 ```bash
 gh api --paginate repos/OWNER/REPO/pulls/N/reviews
@@ -40,7 +42,7 @@ Also fetch PR metadata and current head:
 gh pr view N --json title,body,headRefName,headRefOid,baseRefName,reviewDecision,url
 ```
 
-If a connector or MCP tool is available instead of `gh`, use the equivalent calls. The required result is the same: full PR metadata plus every review body, inline review comment, and top-level conversation comment.
+The required result is full PR metadata plus every review body, inline review comment, and top-level conversation comment.
 
 ## Classify Items
 
