@@ -13,7 +13,9 @@ Project-specific trigger aliases such as `issue N` are compatibility shims. The 
 
 ## Gather Facts
 
-Read the issue body, comments, labels, linked PRs, and related files. Use the provider tool available to the project, for example:
+Read the issue body, comments, labels, linked PRs, and related files.
+
+**Tool selection.** Prefer the local `gh` CLI for all GitHub interactions; it is the lowest-friction, best-authenticated path on most workstations. Fall back to a GitHub MCP server or connector tool only when `gh` is missing, unauthenticated, or the required call has no `gh` equivalent. Do not start with a connector when `gh` would work.
 
 ```bash
 gh issue view N --comments

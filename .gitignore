@@ -13,3 +13,6 @@ __pycache__/
 coverage/
 htmlcov/
 *.log
+
+# Local superpowers brainstorming/planning notes — never committed.
+docs/superpowers/

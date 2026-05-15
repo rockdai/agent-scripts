@@ -20,7 +20,7 @@ Read the consuming repository's agent instructions and fetch:
 - Commits since the last reviewed head.
 - Checks and tests relevant to changed files.
 
-If using GitHub CLI:
+**Tool selection.** Prefer the local `gh` CLI for all GitHub interactions; it is the lowest-friction, best-authenticated path on most workstations. Fall back to a GitHub MCP server or connector tool only when `gh` is missing, unauthenticated, or the required call has no `gh` equivalent. Do not start with a connector when `gh` would work.
 
 ```bash
 gh pr view N --json headRefOid,reviewDecision,comments,reviews,files
@@ -28,8 +28,6 @@ gh pr diff N
 gh api --paginate repos/OWNER/REPO/pulls/N/comments
 gh api --paginate repos/OWNER/REPO/issues/N/comments
 ```
-
-Use connector or API equivalents when available.
 
 ## Decision Path
 
