@@ -5,7 +5,8 @@ Scripts for agents, shared between my repositories.
 ## Skills
 
 - `skills/spells`: route shortcut chat triggers (`pr N`, `review N`, `recheck N`, `merged`, `merged N`, `issue N`) to the other skills below.
-- `skills/pr-feedback`: process pull request review feedback as the PR author.
+- `skills/code-review`: dev ↔ qa review-loop contract — round-trip timing, what qa looks for, finding/reply format, stop conditions.
+- `skills/pr-feedback`: process pull request review feedback as the dev (PR author).
 - `skills/pr-review`: perform a full independent pull request review.
 - `skills/pr-recheck`: re-evaluate a pull request after author changes or replies.
 - `skills/merge-sync`: synchronize local agent workspaces after a pull request merge.
