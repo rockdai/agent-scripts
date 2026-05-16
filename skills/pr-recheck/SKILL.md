@@ -25,9 +25,12 @@ Read the consuming repository's agent instructions and fetch:
 ```bash
 gh pr view N --json headRefOid,reviewDecision,comments,reviews,files
 gh pr diff N
+gh api --paginate repos/OWNER/REPO/pulls/N/reviews
 gh api --paginate repos/OWNER/REPO/pulls/N/comments
 gh api --paginate repos/OWNER/REPO/issues/N/comments
 ```
+
+`gh pr view --json reviews` returns at most one unpaginated page; on PRs with many review rounds it silently truncates older verdicts. Always fetch the full review history via the paginated `gh api` line above before deciding any finding is "closed".
 
 ## Decision Path
 
