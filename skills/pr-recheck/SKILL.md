@@ -37,6 +37,13 @@ gh api --paginate repos/OWNER/REPO/issues/N/comments
 
 ## Output
 
-Post the result to the PR. For unresolved issues, write findings with concrete evidence. If all findings are closed and no new issues are found, approve or leave the project's no-finding signal if approval is unavailable.
+Post the result to the PR. For unresolved issues, write findings with concrete evidence.
+
+If all findings are closed and no new issues are found, emit BOTH signals — they are independent and any one is sufficient, but doing both is the durable verdict:
+
+1. Submit an approving review (`gh pr review N --approve`). On hosts that block self-approval, this step will fail; that is expected.
+2. Submit a `:+1:` review comment (`gh pr review N --comment --body ':+1:'`).
+
+Step 2 alone counts on hosts whose backend recognizes the `:+1:` shorthand in a review body (e.g. baxian). Some hosts only parse a structured marker (e.g. `<!-- baxian:<agent>:approve -->`) — check the host's agent rules for the exact recognized signals.
 
 After the result is visible on the PR, notify the dev using the project rule. If the project uses a qa-to-dev callback, use `review-notify` or the configured transport.
