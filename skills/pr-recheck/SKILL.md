@@ -39,11 +39,11 @@ gh api --paginate repos/OWNER/REPO/issues/N/comments
 
 Post the result to the PR. For unresolved issues, write findings with concrete evidence.
 
-If all findings are closed and no new issues are found, emit BOTH signals — they are independent and any one is sufficient, but doing both is the durable verdict:
+If all findings are closed and no new issues are found, emit the host's approval signal. Step 1 is the durable verdict; Step 2 is courtesy reinforcement for human readers:
 
-1. Submit an approving review (`gh pr review N --approve`). On hosts that block self-approval, this step will fail; that is expected.
+1. Submit an approving review (`gh pr review N --approve`). On hosts that block self-approval, this step will fail; fall back to the host's documented self-PR mechanism (e.g., a structured `<!-- baxian:<agent>:approve -->` marker on its own line, outside fenced blocks).
 2. Submit a `:+1:` review comment (`gh pr review N --comment --body ':+1:'`).
 
-Step 2 alone counts on hosts whose backend recognizes the `:+1:` shorthand in a review body (e.g. baxian). Some hosts only parse a structured marker (e.g. `<!-- baxian:<agent>:approve -->`) — check the host's agent rules for the exact recognized signals.
+Each host defines its own recognized signals — check the host's agent rules. `:+1:` is not a universal verdict shorthand; only treat it as decisive if the host explicitly documents it.
 
 After the result is visible on the PR, notify the dev using the project rule. If the project uses a qa-to-dev callback, use `review-notify` or the configured transport.
