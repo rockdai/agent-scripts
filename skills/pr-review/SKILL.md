@@ -1,13 +1,13 @@
 ---
 name: pr-review
-description: Use when an agent must perform a full independent pull request review, including project aliases like "review N", PR diffs, tests, prior comments, human authorization context, findings, approval, and author notification.
+description: Use when the qa agent must perform a full independent pull request review, including project aliases like "review N", PR diffs, tests, prior comments, human authorization context, findings, approval, and dev notification.
 ---
 
 # PR Review
 
 ## Overview
 
-Review the pull request as an independent reviewer. Treat the PR, commits, comments, checks, issues, and repository instructions as the durable source of truth; do not rely on another agent's private transcript or summary.
+Review the pull request as the independent qa. Treat the PR, commits, comments, checks, issues, and repository instructions as the durable source of truth; do not rely on another agent's private transcript or summary.
 
 Project-specific trigger aliases such as `review N` are compatibility shims. The reusable concept is "perform a full PR review".
 
@@ -18,8 +18,8 @@ Read the consuming repository's agent instructions first. Identify:
 - Review scope and finding format.
 - Required test-review expectations.
 - Whether approval is allowed.
-- How reviewer results must be written to the PR.
-- How to notify the author agent after the review.
+- How qa results must be written to the PR.
+- How to notify the dev after the review.
 
 Fetch PR metadata, current head, diff, existing reviews, inline comments, issue comments, checks, and linked issue context.
 
@@ -52,4 +52,4 @@ If no findings remain, approve if the platform and role allow it; otherwise leav
 
 ## Notify Author
 
-After the review result is durable on the PR, follow the project notification rule. If the project uses a reviewer-to-author callback, use `review-notify` or the configured transport. Do not dispatch before the PR review/comment is visible.
+After the review result is durable on the PR, follow the project notification rule. If the project uses a qa-to-dev callback, use `review-notify` or the configured transport. Do not dispatch before the PR review/comment is visible.

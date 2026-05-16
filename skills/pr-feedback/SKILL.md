@@ -1,6 +1,6 @@
 ---
 name: pr-feedback
-description: Use when a pull request author must process review feedback, including project aliases like "pr N", reviewer callbacks, human comments, bot findings, threaded review comments, Fixed/Won't fix replies, follow-up issues, or recheck requests.
+description: Use when the dev (PR author) must process review feedback, including project aliases like "pr N", qa callbacks, human comments, bot findings, threaded review comments, Fixed/Won't fix replies, follow-up issues, or recheck requests.
 ---
 
 # PR Feedback
@@ -17,7 +17,7 @@ Read the consuming repository's agent instructions first. In particular, find:
 - Required test and push rules.
 - How to identify already-addressed comments.
 - Whether out-of-scope feedback must become an issue.
-- How to notify a review agent after replies or new commits.
+- How to notify the qa agent after replies or new commits.
 - The transport skill or script used for notification, if any.
 
 Do not rely on another agent's chat transcript or tmux pane output. If the feedback is not in the PR, ask that it be written there before treating it as official review input.
@@ -99,7 +99,7 @@ Never announce "fixed", "done", or "complete" before code changes are committed 
 
 After all replies and commits are visible on the PR, follow the consuming repository's notification rule. Common patterns include:
 
-- Dispatching `recheck N` to a review agent.
+- Dispatching `recheck N` to the qa agent.
 - Requesting another review from a human or bot.
 - Leaving the PR ready for manual merge.
 

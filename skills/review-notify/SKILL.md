@@ -1,6 +1,6 @@
 ---
 name: review-notify
-description: Use when an agent must notify a reviewer or author agent about pull request state, including first review requests, recheck requests, reviewer callbacks, merge-sync callbacks, bot review requests, or transport failures.
+description: Use when an agent must notify the qa or dev agent about pull request state, including first review requests, recheck requests, qa callbacks, merge-sync callbacks, bot review requests, or transport failures.
 ---
 
 # Review Notify
@@ -24,9 +24,9 @@ Do not notify from memory. Verify the PR number and current head when the messag
 
 ## Common Transitions
 
-- New PR or first review request: notify the reviewer with the project's full-review message.
-- New commit, changed PR description, or reply to a finding: notify the reviewer with the project's recheck message.
-- Reviewer has posted findings or approval: notify the author with the project's feedback-processing message.
+- New PR or first review request: notify the qa with the project's full-review message.
+- New commit, changed PR description, or reply to a finding: notify the qa with the project's recheck message.
+- Qa has posted findings or approval: notify the dev with the project's feedback-processing message.
 - PR merged: notify peer workspaces with the project's merge-sync message.
 
 ## Transport

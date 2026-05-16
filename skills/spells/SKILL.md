@@ -17,7 +17,7 @@ Spells are recognized in natural-language input; they are not slash commands and
 | ------------ | ----------------------------------------- | --------------------------------------------------------------------- |
 | `pr N`       | [`pr-feedback`](../pr-feedback/SKILL.md)  | Process all reviewer feedback on pull request `N`.                    |
 | `review N`   | [`pr-review`](../pr-review/SKILL.md)      | First-time full review of pull request `N`.                           |
-| `recheck N`  | [`pr-recheck`](../pr-recheck/SKILL.md)    | Re-evaluate pull request `N` after the author responded to findings.  |
+| `recheck N`  | [`pr-recheck`](../pr-recheck/SKILL.md)    | Re-evaluate pull request `N` after the dev responded to findings.     |
 | `merged`     | [`merge-sync`](../merge-sync/SKILL.md)    | The PR you just pushed has been merged (see form note below).         |
 | `merged N`   | [`merge-sync`](../merge-sync/SKILL.md)    | Peer agent telling you PR `N` has been merged (see form note below).  |
 | `issue N`    | [`issue-check`](../issue-check/SKILL.md)  | Verify and handle GitHub issue `N`.                                   |
