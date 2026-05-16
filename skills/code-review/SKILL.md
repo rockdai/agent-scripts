@@ -86,7 +86,7 @@ If the PR resolves a GitHub Issue, the PR description must use one of GitHub's c
 
 Only these keywords trigger GitHub's auto-close on merge. `Addresses #N`, `Related to #N`, and a bare URL do **not**, and they leave the issue dangling in OPEN after the PR merges.
 
-When qa sees a PR that is clearly fixing an issue but the description does not contain a closing keyword, qa raises a finding. Dev fixes the description and re-notifies with `recheck N`.
+When qa sees a PR that is clearly fixing an issue but the description does not contain a closing keyword, qa raises a finding. The dev fixes the description and re-notifies with `recheck N`.
 
 Official reference: <https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword>.
 
@@ -131,7 +131,7 @@ When qa concludes a round with no remaining findings:
 
 ## Replying to Findings
 
-Dev replies to **every** actionable finding — silence is not allowed. Each reply starts with one of two literal first lines:
+The dev replies to **every** actionable finding — silence is not allowed. Each reply starts with one of two literal first lines:
 
 - `Fixed` — the change has been made. The first line is exactly `Fixed` on its own; details follow on subsequent lines. Reference the commit SHA when a code change was pushed for this finding. Do not post `Fixed` until the commit is pushed to the PR branch.
 - `Won't fix` — the finding is declined. The first line is exactly `Won't fix` on its own; the explanation that follows must cite concrete evidence (a behavior, a constraint, an authorization recorded earlier in the PR). Vague refusals like "not needed" are not acceptable.
@@ -151,11 +151,11 @@ When a finding is real but does not belong in the current PR (different subsyste
 
 ## Stop Conditions
 
-The loop should converge. Dev stops and reports current state to the human when any of these is true:
+The loop should converge. The dev stops and reports current state to the human when any of these is true:
 
 1. **qa approved.** qa posted `APPROVE` or replied `:+1:` on the PR with no open findings.
 2. **Every open qa finding has a `Won't fix` reply with reasoning on the PR.** Continuing the loop would just re-receive the same findings.
 3. **Ten rounds have passed.** Ten iterations of "fix → notify → respond" without convergence usually means the design itself is contested or the PR scope has crept; escalate to the human rather than spinning more.
 4. **A new human instruction supersedes the loop.** Human instructions outrank the in-flight review cycle.
 
-When stopping, dev summarizes for the human: the current PR review decision, the list of any unresolved findings, and the recommended next action (await `merged`, split into a follow-up issue, redesign, etc.).
+When stopping, the dev summarizes for the human: the current PR review decision, the list of any unresolved findings, and the recommended next action (await `merged`, split into a follow-up issue, redesign, etc.).

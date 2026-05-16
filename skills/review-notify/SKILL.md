@@ -26,7 +26,7 @@ Do not notify from memory. Verify the PR number and current head when the messag
 
 - New PR or first review request: notify the qa with the project's full-review message.
 - New commit, changed PR description, or reply to a finding: notify the qa with the project's recheck message.
-- Qa has posted findings or approval: notify the dev with the project's feedback-processing message.
+- The qa has posted findings or approval: notify the dev with the project's feedback-processing message.
 - PR merged: notify peer workspaces with the project's merge-sync message.
 
 ## Transport
