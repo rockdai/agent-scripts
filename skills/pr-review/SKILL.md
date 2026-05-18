@@ -33,6 +33,30 @@ gh api --paginate repos/OWNER/REPO/pulls/N/comments
 gh api --paginate repos/OWNER/REPO/issues/N/comments
 ```
 
+## Blocker Pre-check
+
+Before reading the diff, check the PR for blockers that will force the dev to change the code anyway. If a blocker is present, post it as a finding, emit the host's CHANGES_REQUESTED signal, and stop — do not continue into the deep review this round. Re-reviewing a diff that is about to move is wasted work and burns a loop round.
+
+Two blockers fast-fail the review:
+
+- **CI is failing.** The PR head has at least one definitively failed check (`failure`, `error`, `cancelled`, or equivalent). Pending or in-progress checks are not a blocker — proceed normally. A repo with no CI configured is also not a blocker.
+- **PR has merge conflicts.** GitHub reports `mergeable: CONFLICTING`. `UNKNOWN` is GitHub still computing and is not a blocker.
+
+Detect with:
+
+```bash
+gh pr view N --json mergeable,statusCheckRollup
+gh pr checks N
+```
+
+When a blocker is present:
+
+1. Post one finding per blocker, naming the failed check(s) with their run URLs, or stating that the PR conflicts with the base. Say explicitly that detailed review was skipped and the dev should re-notify with `recheck N` after fixing.
+2. Emit the host's CHANGES_REQUESTED signal. The host's documented self-PR fallback still applies when the platform blocks self-review.
+3. Stop here. Do not continue to Review Scope.
+
+If both blockers are present, report both in the same review — the dev should see the full picture before pushing the fix.
+
 ## Review Scope
 
 Prioritize findings that affect behavior or maintainability:

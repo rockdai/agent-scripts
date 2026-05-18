@@ -32,6 +32,19 @@ gh api --paginate repos/OWNER/REPO/issues/N/comments
 
 `gh pr view --json reviews` returns at most one unpaginated page; on PRs with many review rounds it silently truncates older verdicts. Always fetch the full review history via the paginated `gh api` line above before deciding any finding is "closed".
 
+## Blocker Pre-check
+
+The blocker gate from `pr-review` applies on every recheck. If the current head has CI failing or `mergeable: CONFLICTING`, post the blocker as a finding, emit the host's CHANGES_REQUESTED signal, and stop — do not re-walk prior findings or the new diff this round. The dev will need to push another commit either way, and the recheck after that fix is when the real re-evaluation belongs.
+
+Detect with:
+
+```bash
+gh pr view N --json mergeable,statusCheckRollup
+gh pr checks N
+```
+
+See [`pr-review` § Blocker Pre-check](../pr-review/SKILL.md) for the full rules (what counts as a blocker, pending vs failed, both-present handling, and the finding format). Once the dev re-notifies with `recheck N` and the blocker is gone, the recheck proceeds normally through Decision Path.
+
 ## Decision Path
 
 - If the head changed, review the increment since the previous reviewed head, verify every prior finding is actually closed, and check that new or changed behavior has tests.
