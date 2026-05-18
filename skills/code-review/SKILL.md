@@ -90,6 +90,19 @@ When qa sees a PR that is clearly fixing an issue but the description does not c
 
 Official reference: <https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword>.
 
+## Review Blockers
+
+Before reading the diff in detail, qa checks for blockers that will force the dev to change the code anyway. If a blocker is present, qa stops the round early — posts the blocker as a finding, emits the host's CHANGES_REQUESTED signal, and skips the diff-level review. Re-reviewing code that is about to move wastes a round of the loop.
+
+Two blockers fast-fail a review:
+
+- **CI is failing.** The PR head has at least one definitively failed check.
+- **PR has merge conflicts.** GitHub reports `mergeable: CONFLICTING`.
+
+Pending or in-progress CI and `mergeable: UNKNOWN` are not blockers — those resolve on their own. The same gate applies on recheck: if the current head still fails CI or still conflicts, fast-fail again.
+
+Procedure (which commands, which fields, finding format) lives in [`pr-review` § Blocker Pre-check](../pr-review/SKILL.md) and [`pr-recheck` § Blocker Pre-check](../pr-recheck/SKILL.md).
+
 ## Review Scope
 
 Default to finding problems, not summarizing the diff. A review that just narrates "this PR adds X, then Y, then Z" is a missed review. Prioritize, in this order:
