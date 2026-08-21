@@ -348,23 +348,43 @@ REMOTE
 # Any single tmux client call or the ssh transport itself can block
 # forever against a wedged peer, which has stranded dispatches >120s
 # with no exit (kongkong#339). macOS ships no timeout(1), so this is a
-# plain bash watchdog: background the command, SIGTERM it when the
+# plain bash watchdog: poll the backgrounded command's liveness with
+# short foreground sleeps, SIGTERM its whole process group when the
 # budget runs out, propagate its exit status (143 = 128+SIGTERM on
-# timeout). If the kill fires while a tmux client child is truly
-# wedged, that orphan is the target host's to reap — the caller is
-# unblocked either way. The watchdog's own sleep may outlive us by up
-# to TIMEOUT_SECS; it exits on its own and holds no fds.
+# timeout).
+#
+# Two constraints shape the mechanics (kongkong#343 review):
+#   - No detached timer process: a `( sleep; kill ) &` timer inherits
+#     our stdout, so a caller capturing us in $() stays blocked on the
+#     open pipe for the full budget even after an instant success, and
+#     the timer's sleep leaks past our exit. Foreground poll sleeps
+#     mirror the 0.2s ticks REMOTE_BODY already uses.
+#   - Kill the tree, not the wrapper: `kill $cmd_pid` alone reaps the
+#     wrapper bash but orphans a truly wedged tmux client under it to
+#     PPID 1. `set -m` gives the spawned command its own process group
+#     (pgid = pid) so `kill -- -PID` tears the whole tree down.
 with_deadline() {
-    local cmd_rc=0 cmd_pid watchdog_pid
+    local cmd_rc=0 cmd_pid ticks_left
+    set -m
     # `<&0`: an explicit stdin redirection — without one, bash points a
     # background command's stdin at /dev/null (no job control), which
     # would swallow the herestring that delivers the script body.
     "$@" <&0 &
     cmd_pid=$!
-    ( sleep "$TIMEOUT_SECS"; kill "$cmd_pid" 2>/dev/null ) &
-    watchdog_pid=$!
-    wait "$cmd_pid" || cmd_rc=$?
-    kill "$watchdog_pid" 2>/dev/null || true
+    set +m
+    # Liveness, not zombie-ness: bash reaps children on SIGCHLD and holds
+    # their status for `wait`, so `kill -0` fails as soon as CMD exits.
+    ticks_left=$(( TIMEOUT_SECS * 5 ))
+    while kill -0 "$cmd_pid" 2>/dev/null && [ "$ticks_left" -gt 0 ]; do
+        sleep 0.2
+        ticks_left=$(( ticks_left - 1 ))
+    done
+    if kill -0 "$cmd_pid" 2>/dev/null; then
+        kill -TERM -- "-$cmd_pid" 2>/dev/null || true
+    fi
+    # 2>/dev/null mutes bash's asynchronous "Terminated: 15" job notice
+    # on the timeout path; wait itself reports the status via $?.
+    wait "$cmd_pid" 2>/dev/null || cmd_rc=$?
     return "$cmd_rc"
 }
 
