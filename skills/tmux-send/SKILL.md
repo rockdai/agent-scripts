@@ -9,7 +9,7 @@ description: Use when an agent needs to send a short one-line command, trigger a
 
 Use tmux only as a transport for short, one-line signals between already-running agent sessions. Do not use tmux pane contents as the source of truth for decisions, findings, or status; durable project systems such as PR comments, issues, commits, and logs must hold the actual record.
 
-This skill provides `scripts/tmux-send.sh`, a safer wrapper around `tmux send-keys` that verifies the text reaches the target TUI input line before pressing Enter.
+This skill provides `scripts/tmux-send.sh`, a safer wrapper around tmux paste/send-keys that verifies the text reaches the target TUI input line before pressing Enter.
 
 This skill assumes the target agent sessions already exist. It borrows only the lightweight tmux operations that are useful for persistent sessions: list sessions, capture recent output for troubleshooting, attach when a human needs to watch live, and kill stale sessions when the project explicitly allows it. It does not introduce a generic agent spawner or model launcher.
 
@@ -103,6 +103,7 @@ Exit codes:
 - `0`: sent. With default verification, the text was confirmed submitted.
 - `2`: usage error.
 - `3`: text did not fully land in the input line or remained stuck after submit.
+- `143`: watchdog kill — the dispatch exceeded `TMUX_SEND_TIMEOUT` seconds (default 45) because ssh or a tmux client call stopped responding.
 - Other non-zero: propagated from `ssh`, `tmux`, or the shell.
 
 Constraints:
@@ -111,12 +112,14 @@ Constraints:
 - Prefer default verification. Use `--no-verify` only for explicit fire-and-forget cases.
 - The default tmux binary is `tmux` from `PATH`, with `/opt/homebrew/bin/tmux` as a fallback when present. Use `--tmux` for hosts with a different tmux location.
 - The default prompt matcher recognizes `>`, `$`, `›`, and `❯`. Use `--prompt-regex` when the target TUI uses a different prompt token. Use `--prompt-regex=ERE` when the pattern itself starts with `--`.
+- The whole dispatch is bounded by the `TMUX_SEND_TIMEOUT` watchdog (positive integer seconds, default 45). Raise it for very slow links.
 - For remote dispatch, bootstrap SSH host keys interactively before relying on non-interactive sends.
 
 ## Troubleshooting
 
 - `Host key verification failed`: SSH to the target host once interactively and accept the host key.
 - `tmux target not found`: verify the session name and the tmux binary path.
+- Exit `143`: the watchdog killed a hung dispatch. Check that the target host is reachable and its tmux server responds (`tmux list-sessions`), then retry.
 - Exit `3`: capture the target pane and check whether the TUI prompt is blocked, not focused, or needs a project-specific `--prompt-regex`.
 - Text appears typed but not submitted: rerun without `--no-verify`, then inspect the pane.
 

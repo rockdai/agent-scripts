@@ -9,8 +9,9 @@
 #      already in its buffer → a truncated message submits silently, and a
 #      naive "did the text disappear from pane" check returns success.
 #
-# This script handles both: it sends the literal text, polls
-# `capture-pane` until the full text appears in the input area, *then*
+# This script handles both: it pastes the literal text (via a tmux
+# buffer, one atomic pty write), polls `capture-pane` until the full
+# text appears in the input area, *then*
 # sends Enter, and polls again until the text leaves the input line.
 # Any step that won't converge exits 3 so the caller knows to intervene.
 #
@@ -29,6 +30,10 @@
 #   --no-verify     skip the post-Enter verification (fire-and-forget);
 #                   pre-Enter verification still runs
 #
+# Environment:
+#   TMUX_SEND_TIMEOUT  watchdog budget in seconds for the whole dispatch
+#                      (default: 45). See exit code 143.
+#
 # Examples:
 #   # Local session
 #   scripts/tmux-send.sh my-session "build frontend"
@@ -40,6 +45,8 @@
 #   0 — sent (and if verified, confirmed submitted)
 #   2 — usage error
 #   3 — text never fully landed in input area, or still stuck after retry
+#   143 — watchdog kill: dispatch exceeded TMUX_SEND_TIMEOUT seconds (a
+#         wedged TUI, tmux client, or ssh transport stopped responding)
 #   other non-zero — propagated from underlying commands when set -e fires
 #                    (ssh auth/connect failure: 255; tmux target not found / not
 #                    on PATH: 1 / 127). Treat any non-zero exit as failure.
@@ -152,6 +159,18 @@ validate_prompt_regex() {
 
 validate_prompt_regex
 
+# Whole-dispatch watchdog budget. The poll loops in REMOTE_BODY are
+# finite, but the tmux/ssh calls between them are not — a wedged TUI has
+# hung a dispatch indefinitely before (kongkong#339). Worst-case legit
+# run is ~20s (10s ssh connect + ~6.5s pre-Enter + ~3s post-Enter), so
+# the default only fires on a genuine hang. Env-tunable for tests and
+# slow links.
+TIMEOUT_SECS="${TMUX_SEND_TIMEOUT:-45}"
+if ! [[ "$TIMEOUT_SECS" =~ ^[1-9][0-9]*$ ]]; then
+    echo "tmux-send: TMUX_SEND_TIMEOUT must be a positive integer in seconds (got: $TIMEOUT_SECS)" >&2
+    exit 2
+fi
+
 REMOTE_BODY=$(cat <<'REMOTE'
 set -euo pipefail
 # Do NOT name this TMUX — that variable is reserved: tmux client reads
@@ -254,21 +273,30 @@ text_at_input_line() {
 #   1. Sends C-u (kill-line) to clear any leftover from a prior dispatch
 #      OR a previous retry that partially landed. Without this, a TUI
 #      that drops chars under render pressure leaves a partial typed
-#      prefix that the next send-keys concatenates onto, producing
+#      prefix that the next paste concatenates onto, producing
 #      `❯ pr 221pr 221pr 221` style corruption that exits 3 with a
 #      dirty input box.
-#   2. Sends the literal text once.
+#   2. Pastes the literal text once via set-buffer + paste-buffer: the
+#      text reaches the pty as ONE atomic write instead of per-char key
+#      events. Per-char `send-keys -l` raced busy TUI key handling and
+#      dropped whole messages, not just chars (kongkong#339); paste
+#      rides the same path as a human terminal paste.
 #   3. Polls for up to 2 seconds (10 * 0.2s) for `text_at_input_line`
 #      to confirm. On timeout, the next attempt's C-u re-clears.
 #
-# Worst case: 3 C-u + 3 send-keys; final pane state is clean even on
+# Worst case: 3 C-u + 3 pastes; final pane state is clean even on
 # exit 3 (the last C-u + send leaves at most one TEXT in the input box,
 # never a concatenation).
 landed=0
 for send_attempt in 1 2 3; do
     "$TMUX_CMD" send-keys -t "$TARGET" C-u
     sleep 0.1
-    "$TMUX_CMD" send-keys -t "$TARGET" -l "$TEXT"
+    # -d frees the buffer after paste, -p wraps in bracket codes only
+    # when the TUI opted into bracketed paste, the $$-suffixed name
+    # keeps concurrent dispatches to one tmux server from clobbering
+    # each other, and `--` protects TEXT starting with a dash.
+    "$TMUX_CMD" set-buffer -b "tmux-send-$$" -- "$TEXT"
+    "$TMUX_CMD" paste-buffer -d -p -b "tmux-send-$$" -t "$TARGET"
     for tick in 1 2 3 4 5 6 7 8 9 10; do
         sleep 0.2
         if text_at_input_line; then
@@ -316,6 +344,30 @@ fi
 REMOTE
 )
 
+# with_deadline CMD... — run CMD bounded by TIMEOUT_SECS seconds.
+# Any single tmux client call or the ssh transport itself can block
+# forever against a wedged peer, which has stranded dispatches >120s
+# with no exit (kongkong#339). macOS ships no timeout(1), so this is a
+# plain bash watchdog: background the command, SIGTERM it when the
+# budget runs out, propagate its exit status (143 = 128+SIGTERM on
+# timeout). If the kill fires while a tmux client child is truly
+# wedged, that orphan is the target host's to reap — the caller is
+# unblocked either way. The watchdog's own sleep may outlive us by up
+# to TIMEOUT_SECS; it exits on its own and holds no fds.
+with_deadline() {
+    local cmd_rc=0 cmd_pid watchdog_pid
+    # `<&0`: an explicit stdin redirection — without one, bash points a
+    # background command's stdin at /dev/null (no job control), which
+    # would swallow the herestring that delivers the script body.
+    "$@" <&0 &
+    cmd_pid=$!
+    ( sleep "$TIMEOUT_SECS"; kill "$cmd_pid" 2>/dev/null ) &
+    watchdog_pid=$!
+    wait "$cmd_pid" || cmd_rc=$?
+    kill "$watchdog_pid" 2>/dev/null || true
+    return "$cmd_rc"
+}
+
 run() {
     # Build the remote script with args inlined as shell-escaped variable
     # assignments instead of positional args via `bash -s -- a b "c d" e`.
@@ -334,11 +386,11 @@ run() {
         # for stdin no caller is going to provide. ConnectTimeout=10: same
         # idea against an unreachable host. Host-key bootstrap is a one-time
         # interactive `ssh` per new peer before relying on automation.
-        ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" bash <<<"$script"
+        with_deadline ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" bash <<<"$script"
     else
         # Unset the ambient TMUX env so that tmux client resolves the
         # default socket, not the one pointing at our outer session.
-        env -u TMUX bash <<<"$script"
+        with_deadline env -u TMUX bash <<<"$script"
     fi
 }
 

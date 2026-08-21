@@ -104,12 +104,68 @@ run_case "text with single quote: printf %q escaping preserves apostrophe" \
 run_case "text with glob metachars: \$TEXT in quoted pattern is matched literally" \
     "fake-tui.py" "review *" 0
 
+run_case "leading-dash TEXT: buffer paste -- treats it as data, not flags" \
+    "fake-tui.py" "-n foo" 0
+
 run_ssh_case "ssh path: text with space survives openssh argv joining" \
     "fake-tui.py" "review 221" 0 10
+
+# --- Watchdog: a wedged tmux client must not hang the dispatch (kongkong#339) ---
+# The real bug: poll loops are finite but the tmux/ssh calls between them
+# are not, and a wedged TUI stranded dispatches >120s. hang-tmux blocks on
+# its first invocation; the watchdog must SIGTERM the dispatch (exit 143)
+# instead of waiting it out.
+hang_actual=0
+hang_start=$SECONDS
+TMUX_SEND_TIMEOUT=2 scripts/tmux-send.sh --tmux "$(pwd)/scripts/tests/hang-tmux" \
+    dummy-session "review 221" >/dev/null 2>&1 || hang_actual=$?
+hang_elapsed=$(( SECONDS - hang_start ))
+if [[ "$hang_actual" == 143 && "$hang_elapsed" -le 10 ]]; then
+    printf 'PASS  wedged tmux client: watchdog kills dispatch (exit 143 in %ss)\n' "$hang_elapsed"
+    PASS=$((PASS + 1))
+else
+    printf 'FAIL  wedged tmux client (expected exit 143 within 10s, got exit %s in %ss)\n' "$hang_actual" "$hang_elapsed"
+    FAIL=$((FAIL + 1))
+fi
+
+# Invalid TMUX_SEND_TIMEOUT must be a usage error BEFORE dispatch — a
+# non-numeric value would make the watchdog's `sleep` fail instantly and
+# silently drop the hang protection.
+flag_actual=0
+TMUX_SEND_TIMEOUT=abc scripts/tmux-send.sh test-session "review 221" >/dev/null 2>&1 || flag_actual=$?
+if [[ "$flag_actual" == 2 ]]; then
+    printf 'PASS  non-numeric TMUX_SEND_TIMEOUT returns exit 2\n'
+    PASS=$((PASS + 1))
+else
+    printf 'FAIL  non-numeric TMUX_SEND_TIMEOUT (expected exit 2, got %s)\n' "$flag_actual"
+    FAIL=$((FAIL + 1))
+fi
+
+flag_actual=0
+TMUX_SEND_TIMEOUT=0 scripts/tmux-send.sh test-session "review 221" >/dev/null 2>&1 || flag_actual=$?
+if [[ "$flag_actual" == 2 ]]; then
+    printf 'PASS  zero TMUX_SEND_TIMEOUT returns exit 2\n'
+    PASS=$((PASS + 1))
+else
+    printf 'FAIL  zero TMUX_SEND_TIMEOUT (expected exit 2, got %s)\n' "$flag_actual"
+    FAIL=$((FAIL + 1))
+fi
 
 # `text_at_input_line` only examines lines that start with a prompt glyph,
 # so an exact `last_prompt == TEXT` branch contradicts the input shape. Keep
 # the accepted forms explicit: prompt plus ASCII space, tab, or NBSP.
+# TEXT must reach the pane via buffer paste (one atomic pty write) —
+# per-char `send-keys -l` typing is what busy TUIs dropped whole
+# messages from (kongkong#339). Only control keys (C-u, Enter) may use
+# send-keys.
+if grep -E '"\$TMUX_CMD" send-keys' scripts/tmux-send.sh | grep -q -- ' -l'; then
+    printf 'FAIL  TEXT is still typed per-char with send-keys -l instead of buffer paste\n'
+    FAIL=$((FAIL + 1))
+else
+    printf 'PASS  TEXT reaches the pane via buffer paste, not send-keys -l\n'
+    PASS=$((PASS + 1))
+fi
+
 if grep -qF '[[ "$last_prompt" == "$TEXT" ]]' scripts/tmux-send.sh; then
     printf 'FAIL  text_at_input_line contains exact TEXT branch despite prompt anchoring\n'
     FAIL=$((FAIL + 1))

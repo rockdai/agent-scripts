@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Fake tmux that wedges on any invocation: models the hung tmux client /
+# ssh transport from kongkong#339. Sleeps long enough to trip the
+# watchdog, then FAILS — so a broken watchdog makes the suite fail
+# after 30s instead of hanging it forever.
+sleep 30
+exit 1
