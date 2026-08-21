@@ -173,6 +173,27 @@ run_deadline_case "leader dies, TERM-ignoring child survives: group probe KILLs 
 run_deadline_case "ssh path: remote side self-bounds and cancels its own wedge" \
     "hang-tmux" 2 10 --ssh
 
+# run_bounded's muting must not swallow the bounded command's OWN stderr:
+# diagnostics ride fd 3 back to the caller while the subshell's stderr
+# (where job notices land) goes to /dev/null. Assert the marker arrives,
+# no job notice rides along, and the non-deadline exit code passes
+# through unchanged — deleting the `2>&3` reroute turns this red.
+marker_errlog=$(mktemp)
+marker_actual=0
+scripts/tmux-send.sh --tmux "$(pwd)/scripts/tests/noisy-fail-tmux" \
+    dummy-session "review 221" >/dev/null 2>"$marker_errlog" || marker_actual=$?
+if grep -qF "TMUX-SEND-STDERR-MARKER" "$marker_errlog" \
+    && ! grep -qEi 'terminated|killed' "$marker_errlog" \
+    && [[ "$marker_actual" == 7 ]]; then
+    printf 'PASS  bounded command stderr rides fd3 back to caller (exit 7 passthrough)\n'
+    PASS=$((PASS + 1))
+else
+    printf 'FAIL  bounded command stderr passthrough (expected marker + exit 7, got exit %s, marker lines %s)\n' \
+        "$marker_actual" "$(grep -cF "TMUX-SEND-STDERR-MARKER" "$marker_errlog" || true)"
+    FAIL=$((FAIL + 1))
+fi
+rm -f "$marker_errlog"
+
 # Transport wedge: ssh itself ignores TERM and never returns. The local
 # +15s backstop must converge it and the exit code must be the normalized
 # 143 — not KILL's 137 and not ssh's own 255.

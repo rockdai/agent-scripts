@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Fails immediately with a unique stderr marker: locks the POSITIVE path
+# of run_bounded's stderr plumbing — business diagnostics from the
+# bounded command must ride fd 3 back to the caller even though the
+# run_bounded subshell's own stderr is muted for job notices
+# (kongkong#343 round 4). Exit 7 doubles as an rc-passthrough probe.
+echo "TMUX-SEND-STDERR-MARKER" >&2
+exit 7
