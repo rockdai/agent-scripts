@@ -201,15 +201,21 @@ fi
 #   - Deterministic timeout code: once the deadline fires, return 143 no
 #     matter how the tree died — KILL's 137, ssh's 255, or a late exit 0
 #     from a TERM-ignorer would otherwise leak through and misreport.
+#   - Structurally silent: bash emits its "Terminated: 15" job notice for
+#     a signal-killed background job at an arbitrary later command
+#     boundary, so redirecting any single builtin cannot reliably mute it.
+#     The function body is a SUBSHELL whose own stderr goes to /dev/null —
+#     the job lives in the subshell's table, so every notice lands there —
+#     while CMD's real stderr is rerouted via fd 3 back to the caller's.
 BOUNDED_RUN_DEF=$(cat <<'BOUNDED'
-run_bounded() {
-    local budget="$1"; shift
-    local cmd_rc=0 cmd_pid ticks deadline_fired=0
+run_bounded() (
+    budget="$1"; shift
+    cmd_rc=0; deadline_fired=0
     set -m
     # `<&0`: an explicit stdin redirection — without one, bash points a
     # background command's stdin at /dev/null (no job control), which
     # would swallow the herestring that delivers the script body.
-    "$@" <&0 &
+    "$@" <&0 2>&3 &
     cmd_pid=$!
     set +m
     # Liveness, not zombie-ness: bash reaps children on SIGCHLD and holds
@@ -221,23 +227,26 @@ run_bounded() {
     done
     if kill -0 "$cmd_pid" 2>/dev/null; then
         deadline_fired=1
-        kill -TERM -- "-$cmd_pid" 2>/dev/null || true
+        kill -TERM -- "-$cmd_pid" || true
         ticks=10
+        # Probe the GROUP, not the leader: whether the leader survives a
+        # group TERM while waiting on a foreground child is bash-version
+        # dependent, and a TERM-ignoring grandchild must get the KILL
+        # even after the leader died with the TERM.
         while kill -0 -- "-$cmd_pid" 2>/dev/null && [ "$ticks" -gt 0 ]; do
             sleep 0.2
             ticks=$(( ticks - 1 ))
         done
         if kill -0 -- "-$cmd_pid" 2>/dev/null; then
-            kill -KILL -- "-$cmd_pid" 2>/dev/null || true
+            kill -KILL -- "-$cmd_pid" || true
         fi
     fi
-    # 2>/dev/null mutes bash's asynchronous "Terminated" job notice.
-    wait "$cmd_pid" 2>/dev/null || cmd_rc=$?
+    wait "$cmd_pid" || cmd_rc=$?
     if [ "$deadline_fired" -eq 1 ]; then
-        return 143
+        exit 143
     fi
-    return "$cmd_rc"
-}
+    exit "$cmd_rc"
+) 3>&2 2>/dev/null
 BOUNDED
 )
 eval "$BOUNDED_RUN_DEF"

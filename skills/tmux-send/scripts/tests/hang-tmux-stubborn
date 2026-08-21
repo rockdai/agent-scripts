@@ -1,7 +1,21 @@
 #!/usr/bin/env bash
-# TERM-ignoring wedge: models a hung process whose TERM handler never
-# exits — only the watchdog's KILL escalation converges it. Self-exits
-# after 60s so a broken escalation fails the suite instead of hanging it.
-trap '' TERM
-for _ in $(seq 1 60); do sleep 1; done
-exit 1
+# Deterministic "leader dead, TERM-ignoring child alive" wedge — the exact
+# branch where a leader-only grace probe would skip the KILL and orphan
+# the wedge (kongkong#343 round 3).
+#
+# Whether a bash that is WAITING on a foreground child dies immediately on
+# a group TERM is version-dependent, so the state is pinned by
+# construction instead: the wedge child (re-invocation of this file, so
+# its cmdline keeps the per-run unique path for ownership-scoped pgrep)
+# ignores TERM and runs in the BACKGROUND; the leader waits under a TERM
+# trap that exits at once — defined behavior in bash 3.2 and 5.x alike.
+# The child self-exits after 60s so a broken KILL escalation fails the
+# suite instead of hanging it.
+if [[ "${1:-}" == "__child__" ]]; then
+    trap '' TERM
+    for _ in $(seq 1 60); do sleep 1; done
+    exit 1
+fi
+"$0" __child__ &
+trap 'exit 143' TERM
+wait $!

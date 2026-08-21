@@ -133,10 +133,10 @@ run_deadline_case() {
     if [[ "$mode" == "--ssh" ]]; then
         PATH="$(pwd)/scripts/tests/mock-ssh-bin:$PATH" \
         TMUX_SEND_TIMEOUT="$send_timeout" scripts/tmux-send.sh \
-            --host fake-host --tmux "$unique" dummy-session "review 221" >/dev/null 2>&1 || actual=$?
+            --host fake-host --tmux "$unique" dummy-session "review 221" >/dev/null 2>"$dir/stderr" || actual=$?
     else
         TMUX_SEND_TIMEOUT="$send_timeout" scripts/tmux-send.sh \
-            --tmux "$unique" dummy-session "review 221" >/dev/null 2>&1 || actual=$?
+            --tmux "$unique" dummy-session "review 221" >/dev/null 2>"$dir/stderr" || actual=$?
     fi
     elapsed=$(( SECONDS - start ))
 
@@ -145,14 +145,21 @@ run_deadline_case() {
         residue="left survivors"
         pkill -9 -f "$unique" 2>/dev/null || true
     fi
+    # A deadline kill must not leak bash's asynchronous job notices
+    # ("Terminated: 15", "Killed: 9") onto the caller's stderr — the
+    # muting is structural (run_bounded subshell), so assert it.
+    local noise=""
+    if grep -qEi 'terminated|killed' "$dir/stderr" 2>/dev/null; then
+        noise="job notice on stderr"
+    fi
     rm -rf "$dir"
 
-    if [[ "$actual" == 143 && "$elapsed" -le "$max_elapsed" && -z "$residue" ]]; then
-        printf 'PASS  %s (exit 143 in %ss, no residue)\n' "$name" "$elapsed"
+    if [[ "$actual" == 143 && "$elapsed" -le "$max_elapsed" && -z "$residue" && -z "$noise" ]]; then
+        printf 'PASS  %s (exit 143 in %ss, no residue, quiet stderr)\n' "$name" "$elapsed"
         PASS=$((PASS + 1))
     else
-        printf 'FAIL  %s (expected exit 143 within %ss + no residue, got exit %s in %ss%s)\n' \
-            "$name" "$max_elapsed" "$actual" "$elapsed" "${residue:+, $residue}"
+        printf 'FAIL  %s (expected exit 143 within %ss + no residue + quiet stderr, got exit %s in %ss%s%s)\n' \
+            "$name" "$max_elapsed" "$actual" "$elapsed" "${residue:+, $residue}" "${noise:+, $noise}"
         FAIL=$((FAIL + 1))
     fi
 }
@@ -160,7 +167,7 @@ run_deadline_case() {
 run_deadline_case "wedged tmux client: dispatch deadline fires, tree reaped" \
     "hang-tmux" 2 10
 
-run_deadline_case "TERM-ignoring wedge: KILL escalation converges, tree reaped" \
+run_deadline_case "leader dies, TERM-ignoring child survives: group probe KILLs the orphan" \
     "hang-tmux-stubborn" 2 10
 
 run_deadline_case "ssh path: remote side self-bounds and cancels its own wedge" \
@@ -170,16 +177,22 @@ run_deadline_case "ssh path: remote side self-bounds and cancels its own wedge" 
 # +15s backstop must converge it and the exit code must be the normalized
 # 143 — not KILL's 137 and not ssh's own 255.
 transport_actual=0
+transport_errlog=$(mktemp)
 transport_start=$SECONDS
 PATH="$(pwd)/scripts/tests/mock-ssh-hang-bin:$PATH" \
 TMUX_SEND_TIMEOUT=1 scripts/tmux-send.sh --host fake-host --tmux tmux \
-    dummy-session "review 221" >/dev/null 2>&1 || transport_actual=$?
+    dummy-session "review 221" >/dev/null 2>"$transport_errlog" || transport_actual=$?
 transport_elapsed=$(( SECONDS - transport_start ))
-if [[ "$transport_actual" == 143 && "$transport_elapsed" -le 25 ]]; then
-    printf 'PASS  wedged ssh transport: +15s backstop converges, exit normalized to 143 (%ss)\n' "$transport_elapsed"
+transport_noise=""
+if grep -qEi 'terminated|killed' "$transport_errlog" 2>/dev/null; then
+    transport_noise="job notice on stderr"
+fi
+rm -f "$transport_errlog"
+if [[ "$transport_actual" == 143 && "$transport_elapsed" -le 25 && -z "$transport_noise" ]]; then
+    printf 'PASS  wedged ssh transport: +15s backstop converges, exit normalized to 143 (%ss, quiet stderr)\n' "$transport_elapsed"
     PASS=$((PASS + 1))
 else
-    printf 'FAIL  wedged ssh transport (expected exit 143 within 25s, got exit %s in %ss)\n' "$transport_actual" "$transport_elapsed"
+    printf 'FAIL  wedged ssh transport (expected exit 143 within 25s + quiet stderr, got exit %s in %ss%s)\n' "$transport_actual" "$transport_elapsed" "${transport_noise:+, $transport_noise}"
     FAIL=$((FAIL + 1))
 fi
 
