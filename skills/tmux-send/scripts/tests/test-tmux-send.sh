@@ -128,6 +128,38 @@ else
     FAIL=$((FAIL + 1))
 fi
 
+# After a watchdog kill the whole wedged tree must be gone — the pgroup
+# TERM has to reap hang-tmux and its sleep, not just the wrapper bash
+# (which used to orphan them to PPID 1).
+sleep 1
+if pgrep -f "scripts/tests/hang-tmux" >/dev/null; then
+    printf 'FAIL  wedged tree survives the watchdog kill (orphaned hang-tmux)\n'
+    FAIL=$((FAIL + 1))
+    pkill -f "scripts/tests/hang-tmux" 2>/dev/null || true
+else
+    printf 'PASS  watchdog kill reaps the whole wedged process tree\n'
+    PASS=$((PASS + 1))
+fi
+
+# Success must return the moment the dispatch finishes, even when the
+# caller captures stdout in $( ) — a detached watchdog timer used to hold
+# the substitution pipe open for the full TMUX_SEND_TIMEOUT after exit 0.
+fast_session="tmux-send-test-$$-$RANDOM"
+tmux new-session -d -s "$fast_session" "python3 scripts/tests/fake-tui.py" 2>/dev/null
+sleep 0.3
+fast_actual=0
+fast_start=$SECONDS
+fast_out=$(TMUX_SEND_TIMEOUT=30 scripts/tmux-send.sh --tmux tmux "$fast_session" "review 221" 2>/dev/null) || fast_actual=$?
+fast_elapsed=$(( SECONDS - fast_start ))
+tmux kill-session -t "$fast_session" 2>/dev/null || true
+if [[ "$fast_actual" == 0 && "$fast_elapsed" -le 10 && "$fast_out" == *"len=10"* ]]; then
+    printf 'PASS  success under $( ) returns immediately (%ss, no timer holding the pipe)\n' "$fast_elapsed"
+    PASS=$((PASS + 1))
+else
+    printf 'FAIL  success under $( ) (expected exit 0 within 10s, got exit %s in %ss)\n' "$fast_actual" "$fast_elapsed"
+    FAIL=$((FAIL + 1))
+fi
+
 # Invalid TMUX_SEND_TIMEOUT must be a usage error BEFORE dispatch — a
 # non-numeric value would make the watchdog's `sleep` fail instantly and
 # silently drop the hang protection.

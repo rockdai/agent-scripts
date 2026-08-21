@@ -47,7 +47,7 @@ See [`pr-review` § Blocker Pre-check](../pr-review/SKILL.md) for the full rules
 
 ## Decision Path
 
-- If the head changed, review the increment since the previous reviewed head, verify every prior finding is actually closed, and check that new or changed behavior has tests.
+- If the head changed, review the increment since the previous deep-reviewed head. A round that fast-failed on a blocker reviewed nothing, so it does not move this baseline — if every prior round was blocker-skipped, the increment is the full base-to-head diff. Then verify every prior finding is actually closed, and check that new or changed behavior has tests.
 - If the head did not change but the dev replied, judge the reply against the code and project rules. Do not accept "fixed" claims without evidence.
 - If neither code nor relevant replies changed, say the head has not changed and keep the prior unresolved findings.
 

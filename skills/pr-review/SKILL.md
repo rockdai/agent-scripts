@@ -51,7 +51,7 @@ gh pr checks N
 
 When a blocker is present:
 
-1. Post one finding per blocker, naming the failed check(s) with their run URLs, or stating that the PR conflicts with the base. Say explicitly that detailed review was skipped and the dev should re-notify with `recheck N` after fixing.
+1. Post one finding per blocker, naming the failed check(s) with their run URLs, or stating that the PR conflicts with the base. Say explicitly that detailed review was skipped and the dev should re-notify with `recheck N` after fixing. A blocker-skipped round does NOT establish a reviewed head: the diff you skipped stays in scope for the next round.
 2. Emit the host's CHANGES_REQUESTED signal. The host's documented self-PR fallback still applies when the platform blocks self-review.
 3. Stop here. Do not continue to Review Scope.
 
