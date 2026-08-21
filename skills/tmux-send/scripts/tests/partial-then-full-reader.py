@@ -2,7 +2,7 @@
 first send. From char 11 onward (the retry attempt) it accepts everything.
 Used to verify tmux-send.sh's C-u + retry self-heal:
 
-  1. First `send-keys -l "review 221"` (10 chars) — chars 1-2 land ("re"),
+  1. First paste of "review 221" (10 chars) — chars 1-2 land ("re"),
      chars 3-10 dropped. buf = "re".
   2. tmux-send.sh's pre-Enter verify sees `> re` — predicate fails.
   3. tmux-send.sh sends C-u (kill-line), this fixture clears buf and
