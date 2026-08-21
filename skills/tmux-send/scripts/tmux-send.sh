@@ -31,8 +31,12 @@
 #                   pre-Enter verification still runs
 #
 # Environment:
-#   TMUX_SEND_TIMEOUT  watchdog budget in seconds for the whole dispatch
-#                      (default: 45). See exit code 143.
+#   TMUX_SEND_TIMEOUT  hard deadline in seconds for the dispatch work
+#                      (default: 45). The dispatch body enforces it on its
+#                      own side (remotely for --host), so a wedged peer is
+#                      cancelled there and cannot keep executing late; the
+#                      local caller adds a +15s transport backstop on top.
+#                      See exit code 143.
 #
 # Examples:
 #   # Local session
@@ -45,8 +49,12 @@
 #   0 — sent (and if verified, confirmed submitted)
 #   2 — usage error
 #   3 — text never fully landed in input area, or still stuck after retry
-#   143 — watchdog kill: dispatch exceeded TMUX_SEND_TIMEOUT seconds (a
-#         wedged TUI, tmux client, or ssh transport stopped responding)
+#   143 — deadline exceeded: the dispatch body (TMUX_SEND_TIMEOUT) or the
+#         ssh transport (+15s backstop) was killed by the watchdog.
+#         Deterministic: returned whenever a deadline fired, regardless
+#         of how the killed tree died (TERM, KILL's 137, ssh's 255).
+#         The input line may hold unsubmitted TEXT (next dispatch's C-u
+#         clears it); capture-pane before retrying, as with exit 3.
 #   other non-zero — propagated from underlying commands when set -e fires
 #                    (ssh auth/connect failure: 255; tmux target not found / not
 #                    on PATH: 1 / 127). Treat any non-zero exit as failure.
@@ -171,6 +179,69 @@ if ! [[ "$TIMEOUT_SECS" =~ ^[1-9][0-9]*$ ]]; then
     exit 2
 fi
 
+# run_bounded BUDGET CMD... — run CMD in its own process group with a hard
+# deadline of BUDGET seconds. Defined once and used on BOTH sides of a
+# dispatch (the string is prepended to the remote script): the dispatch
+# body self-bounds its tmux calls at TMUX_SEND_TIMEOUT — on the remote
+# host for --host, so a wedged peer is cancelled there and cannot keep
+# executing arbitrarily late — and the local side wraps the transport
+# with a +15s backstop for a wedged ssh channel.
+#
+# Shaped by four review findings (kongkong#339 / #343):
+#   - No detached timer process: a `( sleep; kill ) &` timer inherits
+#     stdout and holds a caller's $() pipe open for the full budget even
+#     after instant success; foreground 0.2s poll sleeps don't.
+#   - Kill the tree, not the wrapper: `set -m` at spawn gives CMD its own
+#     process group (pgid = pid), so `kill -- -PID` reaps grandchildren
+#     (a wedged tmux client) instead of orphaning them to PPID 1.
+#   - Converge on TERM-ignorers: TERM, 2s grace, then KILL — and the
+#     grace poll probes the GROUP (`kill -0 -- -PID`), not just the
+#     leader, so a surviving grandchild still gets the KILL after the
+#     leader died with the TERM.
+#   - Deterministic timeout code: once the deadline fires, return 143 no
+#     matter how the tree died — KILL's 137, ssh's 255, or a late exit 0
+#     from a TERM-ignorer would otherwise leak through and misreport.
+BOUNDED_RUN_DEF=$(cat <<'BOUNDED'
+run_bounded() {
+    local budget="$1"; shift
+    local cmd_rc=0 cmd_pid ticks deadline_fired=0
+    set -m
+    # `<&0`: an explicit stdin redirection — without one, bash points a
+    # background command's stdin at /dev/null (no job control), which
+    # would swallow the herestring that delivers the script body.
+    "$@" <&0 &
+    cmd_pid=$!
+    set +m
+    # Liveness, not zombie-ness: bash reaps children on SIGCHLD and holds
+    # their status for `wait`, so `kill -0` fails as soon as CMD exits.
+    ticks=$(( budget * 5 ))
+    while kill -0 "$cmd_pid" 2>/dev/null && [ "$ticks" -gt 0 ]; do
+        sleep 0.2
+        ticks=$(( ticks - 1 ))
+    done
+    if kill -0 "$cmd_pid" 2>/dev/null; then
+        deadline_fired=1
+        kill -TERM -- "-$cmd_pid" 2>/dev/null || true
+        ticks=10
+        while kill -0 -- "-$cmd_pid" 2>/dev/null && [ "$ticks" -gt 0 ]; do
+            sleep 0.2
+            ticks=$(( ticks - 1 ))
+        done
+        if kill -0 -- "-$cmd_pid" 2>/dev/null; then
+            kill -KILL -- "-$cmd_pid" 2>/dev/null || true
+        fi
+    fi
+    # 2>/dev/null mutes bash's asynchronous "Terminated" job notice.
+    wait "$cmd_pid" 2>/dev/null || cmd_rc=$?
+    if [ "$deadline_fired" -eq 1 ]; then
+        return 143
+    fi
+    return "$cmd_rc"
+}
+BOUNDED
+)
+eval "$BOUNDED_RUN_DEF"
+
 REMOTE_BODY=$(cat <<'REMOTE'
 set -euo pipefail
 # Do NOT name this TMUX — that variable is reserved: tmux client reads
@@ -267,6 +338,13 @@ text_at_input_line() {
     return 1
 }
 
+# The whole dispatch flow runs under `run_bounded "$TIMEOUT_SECS"` (the
+# helper is prepended to this script by run()): every tmux client call
+# below can block forever against a wedged server, and bounding it HERE
+# — on the remote host for --host dispatches — means a timeout cancels
+# the work where it runs instead of orphaning it behind a dead ssh.
+dispatch_main() {
+
 # --- Pre-Enter: send text, confirm it reached the input line ---
 
 # Up to 3 attempts. Each attempt:
@@ -341,52 +419,12 @@ if [[ "$submitted" -eq 0 ]]; then
         exit 3
     fi
 fi
+
+}
+
+run_bounded "$TIMEOUT_SECS" dispatch_main
 REMOTE
 )
-
-# with_deadline CMD... — run CMD bounded by TIMEOUT_SECS seconds.
-# Any single tmux client call or the ssh transport itself can block
-# forever against a wedged peer, which has stranded dispatches >120s
-# with no exit (kongkong#339). macOS ships no timeout(1), so this is a
-# plain bash watchdog: poll the backgrounded command's liveness with
-# short foreground sleeps, SIGTERM its whole process group when the
-# budget runs out, propagate its exit status (143 = 128+SIGTERM on
-# timeout).
-#
-# Two constraints shape the mechanics (kongkong#343 review):
-#   - No detached timer process: a `( sleep; kill ) &` timer inherits
-#     our stdout, so a caller capturing us in $() stays blocked on the
-#     open pipe for the full budget even after an instant success, and
-#     the timer's sleep leaks past our exit. Foreground poll sleeps
-#     mirror the 0.2s ticks REMOTE_BODY already uses.
-#   - Kill the tree, not the wrapper: `kill $cmd_pid` alone reaps the
-#     wrapper bash but orphans a truly wedged tmux client under it to
-#     PPID 1. `set -m` gives the spawned command its own process group
-#     (pgid = pid) so `kill -- -PID` tears the whole tree down.
-with_deadline() {
-    local cmd_rc=0 cmd_pid ticks_left
-    set -m
-    # `<&0`: an explicit stdin redirection — without one, bash points a
-    # background command's stdin at /dev/null (no job control), which
-    # would swallow the herestring that delivers the script body.
-    "$@" <&0 &
-    cmd_pid=$!
-    set +m
-    # Liveness, not zombie-ness: bash reaps children on SIGCHLD and holds
-    # their status for `wait`, so `kill -0` fails as soon as CMD exits.
-    ticks_left=$(( TIMEOUT_SECS * 5 ))
-    while kill -0 "$cmd_pid" 2>/dev/null && [ "$ticks_left" -gt 0 ]; do
-        sleep 0.2
-        ticks_left=$(( ticks_left - 1 ))
-    done
-    if kill -0 "$cmd_pid" 2>/dev/null; then
-        kill -TERM -- "-$cmd_pid" 2>/dev/null || true
-    fi
-    # 2>/dev/null mutes bash's asynchronous "Terminated: 15" job notice
-    # on the timeout path; wait itself reports the status via $?.
-    wait "$cmd_pid" 2>/dev/null || cmd_rc=$?
-    return "$cmd_rc"
-}
 
 run() {
     # Build the remote script with args inlined as shell-escaped variable
@@ -396,9 +434,9 @@ run() {
     # truncating TEXT. printf '%q' produces a shell-safe literal that
     # survives the round-trip intact. Script body is delivered on stdin.
     local prefix script
-    printf -v prefix 'TMUX_CMD=%q\nTARGET=%q\nTEXT=%q\nVERIFY=%q\nPROMPT_REGEX=%q\n' \
-        "$TMUX_BIN" "$TARGET" "$TEXT" "$VERIFY" "$PROMPT_REGEX"
-    script="$prefix$REMOTE_BODY"
+    printf -v prefix 'TMUX_CMD=%q\nTARGET=%q\nTEXT=%q\nVERIFY=%q\nPROMPT_REGEX=%q\nTIMEOUT_SECS=%q\n' \
+        "$TMUX_BIN" "$TARGET" "$TEXT" "$VERIFY" "$PROMPT_REGEX" "$TIMEOUT_SECS"
+    script="$prefix$BOUNDED_RUN_DEF"$'\n'"$REMOTE_BODY"
 
     if [[ -n "$HOST" ]]; then
         # BatchMode=yes: never prompt for password / passphrase / new host
@@ -406,11 +444,15 @@ run() {
         # for stdin no caller is going to provide. ConnectTimeout=10: same
         # idea against an unreachable host. Host-key bootstrap is a one-time
         # interactive `ssh` per new peer before relying on automation.
-        with_deadline ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" bash <<<"$script"
+        # +15s backstop: the dispatch body already self-bounds at
+        # TIMEOUT_SECS on the remote side; this outer bound only fires
+        # when the ssh transport itself wedges (connect is separately
+        # capped at 10s by ConnectTimeout).
+        run_bounded $(( TIMEOUT_SECS + 15 )) ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" bash <<<"$script"
     else
         # Unset the ambient TMUX env so that tmux client resolves the
         # default socket, not the one pointing at our outer session.
-        with_deadline env -u TMUX bash <<<"$script"
+        run_bounded $(( TIMEOUT_SECS + 15 )) env -u TMUX bash <<<"$script"
     fi
 }
 

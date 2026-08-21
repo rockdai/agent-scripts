@@ -103,7 +103,7 @@ Exit codes:
 - `0`: sent. With default verification, the text was confirmed submitted.
 - `2`: usage error.
 - `3`: text did not fully land in the input line or remained stuck after submit.
-- `143`: watchdog kill — the dispatch exceeded `TMUX_SEND_TIMEOUT` seconds (default 45) because ssh or a tmux client call stopped responding.
+- `143`: deadline exceeded — the dispatch body (bounded at `TMUX_SEND_TIMEOUT`, enforced on the remote host for `--host` sends so a wedged peer is cancelled there) or the ssh transport (+15s local backstop) was killed by the watchdog. Deterministic: returned whenever a deadline fired, regardless of how the killed tree died.
 - Other non-zero: propagated from `ssh`, `tmux`, or the shell.
 
 Constraints:
@@ -112,14 +112,14 @@ Constraints:
 - Prefer default verification. Use `--no-verify` only for explicit fire-and-forget cases.
 - The default tmux binary is `tmux` from `PATH`, with `/opt/homebrew/bin/tmux` as a fallback when present. Use `--tmux` for hosts with a different tmux location.
 - The default prompt matcher recognizes `>`, `$`, `›`, and `❯`. Use `--prompt-regex` when the target TUI uses a different prompt token. Use `--prompt-regex=ERE` when the pattern itself starts with `--`.
-- The whole dispatch is bounded by the `TMUX_SEND_TIMEOUT` watchdog (positive integer seconds, default 45). Raise it for very slow links.
+- The dispatch is hard-bounded: the body self-enforces `TMUX_SEND_TIMEOUT` (positive integer seconds, default 45) with TERM → 2s grace → KILL on its own side, and the local caller adds a +15s transport backstop. Raise `TMUX_SEND_TIMEOUT` for very slow links.
 - For remote dispatch, bootstrap SSH host keys interactively before relying on non-interactive sends.
 
 ## Troubleshooting
 
 - `Host key verification failed`: SSH to the target host once interactively and accept the host key.
 - `tmux target not found`: verify the session name and the tmux binary path.
-- Exit `143`: the watchdog killed a hung dispatch. Check that the target host is reachable and its tmux server responds (`tmux list-sessions`), then retry.
+- Exit `143`: a deadline killed the dispatch. Check that the target host is reachable and its tmux server responds (`tmux list-sessions`). Before retrying, capture the target pane as with exit `3` — the timeout may have struck between Enter and the post-verify, so confirm whether the message already submitted; unsubmitted leftover text is cleared by the next dispatch's C-u.
 - Exit `3`: capture the target pane and check whether the TUI prompt is blocked, not focused, or needs a project-specific `--prompt-regex`.
 - Text appears typed but not submitted: rerun without `--no-verify`, then inspect the pane.
 

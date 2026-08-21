@@ -110,35 +110,77 @@ run_case "leading-dash TEXT: buffer paste -- treats it as data, not flags" \
 run_ssh_case "ssh path: text with space survives openssh argv joining" \
     "fake-tui.py" "review 221" 0 10
 
-# --- Watchdog: a wedged tmux client must not hang the dispatch (kongkong#339) ---
-# The real bug: poll loops are finite but the tmux/ssh calls between them
-# are not, and a wedged TUI stranded dispatches >120s. hang-tmux blocks on
-# its first invocation; the watchdog must SIGTERM the dispatch (exit 143)
-# instead of waiting it out.
-hang_actual=0
-hang_start=$SECONDS
-TMUX_SEND_TIMEOUT=2 scripts/tmux-send.sh --tmux "$(pwd)/scripts/tests/hang-tmux" \
-    dummy-session "review 221" >/dev/null 2>&1 || hang_actual=$?
-hang_elapsed=$(( SECONDS - hang_start ))
-if [[ "$hang_actual" == 143 && "$hang_elapsed" -le 10 ]]; then
-    printf 'PASS  wedged tmux client: watchdog kills dispatch (exit 143 in %ss)\n' "$hang_elapsed"
-    PASS=$((PASS + 1))
-else
-    printf 'FAIL  wedged tmux client (expected exit 143 within 10s, got exit %s in %ss)\n' "$hang_actual" "$hang_elapsed"
-    FAIL=$((FAIL + 1))
-fi
+# --- Deadline cases (kongkong#339 / #343) ---
+# Each case runs its wedge fixture from a per-run UNIQUE copy and asserts
+# residue only against that exact path: a global `pgrep -f hang-tmux`
+# would match (and a cleanup pkill would murder) fixtures belonging to a
+# concurrent suite run or another checkout.
 
-# After a watchdog kill the whole wedged tree must be gone — the pgroup
-# TERM has to reap hang-tmux and its sleep, not just the wrapper bash
-# (which used to orphan them to PPID 1).
-sleep 1
-if pgrep -f "scripts/tests/hang-tmux" >/dev/null; then
-    printf 'FAIL  wedged tree survives the watchdog kill (orphaned hang-tmux)\n'
-    FAIL=$((FAIL + 1))
-    pkill -f "scripts/tests/hang-tmux" 2>/dev/null || true
-else
-    printf 'PASS  watchdog kill reaps the whole wedged process tree\n'
+# run_deadline_case NAME FIXTURE TIMEOUT MAX_ELAPSED [--ssh]
+#   Dispatches against a wedge fixture with the given TMUX_SEND_TIMEOUT,
+#   expects exit 143 within MAX_ELAPSED seconds and no surviving process
+#   from this run's unique fixture copy. --ssh routes through the mock
+#   ssh (the fixture then wedges on the "remote" side of the dispatch).
+run_deadline_case() {
+    local name="$1" fixture="$2" send_timeout="$3" max_elapsed="$4" mode="${5:-local}"
+    local dir unique actual=0 start elapsed residue=""
+    dir=$(mktemp -d)
+    unique="$dir/wedge-$$-$RANDOM"
+    cp "scripts/tests/$fixture" "$unique"
+    chmod +x "$unique"
+
+    start=$SECONDS
+    if [[ "$mode" == "--ssh" ]]; then
+        PATH="$(pwd)/scripts/tests/mock-ssh-bin:$PATH" \
+        TMUX_SEND_TIMEOUT="$send_timeout" scripts/tmux-send.sh \
+            --host fake-host --tmux "$unique" dummy-session "review 221" >/dev/null 2>&1 || actual=$?
+    else
+        TMUX_SEND_TIMEOUT="$send_timeout" scripts/tmux-send.sh \
+            --tmux "$unique" dummy-session "review 221" >/dev/null 2>&1 || actual=$?
+    fi
+    elapsed=$(( SECONDS - start ))
+
+    sleep 1
+    if pgrep -f "$unique" >/dev/null; then
+        residue="left survivors"
+        pkill -9 -f "$unique" 2>/dev/null || true
+    fi
+    rm -rf "$dir"
+
+    if [[ "$actual" == 143 && "$elapsed" -le "$max_elapsed" && -z "$residue" ]]; then
+        printf 'PASS  %s (exit 143 in %ss, no residue)\n' "$name" "$elapsed"
+        PASS=$((PASS + 1))
+    else
+        printf 'FAIL  %s (expected exit 143 within %ss + no residue, got exit %s in %ss%s)\n' \
+            "$name" "$max_elapsed" "$actual" "$elapsed" "${residue:+, $residue}"
+        FAIL=$((FAIL + 1))
+    fi
+}
+
+run_deadline_case "wedged tmux client: dispatch deadline fires, tree reaped" \
+    "hang-tmux" 2 10
+
+run_deadline_case "TERM-ignoring wedge: KILL escalation converges, tree reaped" \
+    "hang-tmux-stubborn" 2 10
+
+run_deadline_case "ssh path: remote side self-bounds and cancels its own wedge" \
+    "hang-tmux" 2 10 --ssh
+
+# Transport wedge: ssh itself ignores TERM and never returns. The local
+# +15s backstop must converge it and the exit code must be the normalized
+# 143 — not KILL's 137 and not ssh's own 255.
+transport_actual=0
+transport_start=$SECONDS
+PATH="$(pwd)/scripts/tests/mock-ssh-hang-bin:$PATH" \
+TMUX_SEND_TIMEOUT=1 scripts/tmux-send.sh --host fake-host --tmux tmux \
+    dummy-session "review 221" >/dev/null 2>&1 || transport_actual=$?
+transport_elapsed=$(( SECONDS - transport_start ))
+if [[ "$transport_actual" == 143 && "$transport_elapsed" -le 25 ]]; then
+    printf 'PASS  wedged ssh transport: +15s backstop converges, exit normalized to 143 (%ss)\n' "$transport_elapsed"
     PASS=$((PASS + 1))
+else
+    printf 'FAIL  wedged ssh transport (expected exit 143 within 25s, got exit %s in %ss)\n' "$transport_actual" "$transport_elapsed"
+    FAIL=$((FAIL + 1))
 fi
 
 # Success must return the moment the dispatch finishes, even when the
