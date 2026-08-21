@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# TERM-ignoring wedge: models a hung process whose TERM handler never
+# exits — only the watchdog's KILL escalation converges it. Self-exits
+# after 60s so a broken escalation fails the suite instead of hanging it.
+trap '' TERM
+for _ in $(seq 1 60); do sleep 1; done
+exit 1

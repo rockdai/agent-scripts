@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# mock ssh whose transport wedges: ignores TERM and never returns within
+# any dispatch budget. Exercises the local +15s backstop and the 143
+# normalization (a KILLed ssh would otherwise surface 137, a TERM-aware
+# one 255). Self-exits after 120s as the suite's last-resort bound.
+trap '' TERM
+for _ in $(seq 1 120); do sleep 1; done
+exit 255
